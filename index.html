@@ -12,9 +12,28 @@
 </head>
 <body>
   <header id="top-controls" aria-label="Ações das notas">
+    <button id="account-btn" class="icon-btn" type="button" title="Conta e sincronização" aria-label="Conta e sincronização">●</button>
     <button id="toggle-sidebar-btn" class="icon-btn" type="button" title="Ver notas guardadas" aria-label="Ver notas guardadas">☰</button>
     <button id="new-note-btn" class="icon-btn" type="button" title="Criar nova nota" aria-label="Criar nova nota">＋</button>
   </header>
+
+  <dialog id="auth-dialog">
+    <form id="auth-form" method="dialog">
+      <div class="dialog-heading"><h2>Sincronização</h2><button id="close-auth-btn" class="plain-btn" type="button" aria-label="Fechar">✕</button></div>
+      <p id="auth-description">Entre com a mesma conta no PC e no telemóvel.</p>
+      <label>E-mail<input id="auth-email" type="email" autocomplete="email" required></label>
+      <label>Palavra-passe<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required></label>
+      <p id="auth-message" role="status" aria-live="polite"></p>
+      <div id="signed-out-actions" class="dialog-actions">
+        <button id="signup-btn" type="button">Criar conta</button>
+        <button id="login-btn" type="submit">Entrar</button>
+      </div>
+      <div id="signed-in-actions" class="dialog-actions" hidden>
+        <button id="sync-btn" type="button">Sincronizar agora</button>
+        <button id="logout-btn" type="button">Terminar sessão</button>
+      </div>
+    </form>
+  </dialog>
 
   <aside id="sidebar" class="sidebar" aria-label="Notas guardadas" aria-hidden="true">
     <div class="sidebar-header">
@@ -68,6 +87,8 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

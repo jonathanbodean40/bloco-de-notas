@@ -1,5 +1,5 @@
-const CACHE = 'notas-pro-v3';
-const FILES = ['./', './index.html', './style.css', './app.js', './manifest.webmanifest', './icon.svg'];
+const CACHE = 'notas-pro-v4';
+const FILES = ['./', './index.html', './style.css', './app.js', './config.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting()));
