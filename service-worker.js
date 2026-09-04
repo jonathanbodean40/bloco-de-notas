@@ -1,4 +1,4 @@
-const CACHE = 'notas-pro-v5';
+const CACHE = 'notas-pro-v6';
 const FILES = ['./', './index.html', './style.css', './app.js', './config.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', event => {

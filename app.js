@@ -46,7 +46,7 @@
     const html = editor.innerHTML;
     if (!heading && !plainText(html)) return;
     const now = new Date().toISOString();
-    const note = { id: currentId || makeId(), title: heading || 'Sem título', content: html, updatedAt: now };
+    const note = { id: currentId || makeId(), title: heading || 'Sem título', content: html, updatedAt: now, deletedAt: null };
     const index = notes.findIndex(item => item.id === note.id);
     if (index >= 0) notes[index] = note; else notes.unshift(note);
     currentId = note.id;
@@ -59,7 +59,7 @@
   }
 
   async function pushNote(note) {
-    const { error } = await cloud.from('notes').upsert({ id: note.id, user_id: user.id, title: note.title, content: note.content, updated_at: note.updatedAt });
+    const { error } = await cloud.from('notes').upsert({ id: note.id, user_id: user.id, title: note.title, content: note.content, updated_at: note.updatedAt, deleted_at: note.deletedAt || null });
     if (error) { saveStatus.textContent = 'Guardado neste dispositivo; sincronização pendente'; return; }
     saveStatus.textContent = 'Sincronizado';
   }
@@ -76,15 +76,15 @@
     }, new Map());
     // Descarregar primeiro evita que uma cópia antiga deste dispositivo
     // substitua uma edição mais recente feita noutro dispositivo.
-    const { data: remoteData, error: downloadError } = await cloud.from('notes').select('id,title,content,updated_at').order('updated_at', { ascending: false });
+    const { data: remoteData, error: downloadError } = await cloud.from('notes').select('id,title,content,updated_at,deleted_at').order('updated_at', { ascending: false });
     if (downloadError) { saveStatus.textContent = 'Sem ligação; notas guardadas neste dispositivo'; return; }
-    const remote = remoteData.map(note => ({ id: note.id, title: note.title, content: note.content, updatedAt: note.updated_at }));
+    const remote = remoteData.map(note => ({ id: note.id, title: note.title, content: note.content, updatedAt: note.updated_at, deletedAt: note.deleted_at || null }));
     const remoteById = new Map(remote.map(note => [note.id, note]));
     const pending = [...localCombined.values()].filter(note => {
       const online = remoteById.get(note.id);
       return !online || new Date(note.updatedAt) > new Date(online.updatedAt);
     });
-    const upload = pending.map(note => ({ id: note.id, user_id: user.id, title: note.title, content: note.content, updated_at: note.updatedAt }));
+    const upload = pending.map(note => ({ id: note.id, user_id: user.id, title: note.title, content: note.content, updated_at: note.updatedAt, deleted_at: note.deletedAt || null }));
     if (upload.length) {
       const { error } = await cloud.from('notes').upsert(upload);
       if (error) { saveStatus.textContent = 'Sem ligação; notas guardadas neste dispositivo'; return; }
@@ -128,9 +128,14 @@
 
   async function deleteNote() {
     if (!currentId || !confirm('Eliminar esta nota?')) return;
-    notes = notes.filter(item => item.id !== currentId);
+    const deletedId = currentId;
+    const existing = notes.find(item => item.id === deletedId);
+    if (!existing) return;
+    const deletedAt = new Date().toISOString();
+    const tombstone = { ...existing, updatedAt: deletedAt, deletedAt };
+    notes = notes.map(item => item.id === deletedId ? tombstone : item);
     persist();
-    if (user) await cloud.from('notes').delete().eq('id', currentId);
+    if (user) await pushNote(tombstone);
     newNote();
   }
 
@@ -169,14 +174,15 @@
 
   function renderNotes() {
     notesList.replaceChildren();
-    if (!notes.length) {
+    const visibleNotes = notes.filter(note => !note.deletedAt);
+    if (!visibleNotes.length) {
       const empty = document.createElement('p');
       empty.className = 'empty-list';
       empty.textContent = 'Ainda não existem notas guardadas.';
       notesList.append(empty);
       return;
     }
-    notes.forEach(note => {
+    visibleNotes.forEach(note => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = `sidebar-note-item${note.id === currentId ? ' active' : ''}`;
