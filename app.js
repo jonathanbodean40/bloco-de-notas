@@ -69,19 +69,29 @@
     saveStatus.textContent = 'A sincronizar…';
     const guestNotes = loadNotes(GUEST_KEY);
     const localNotes = loadNotes(storageKey());
-    const combined = [...localNotes, ...guestNotes].reduce((map, note) => {
+    const localCombined = [...localNotes, ...guestNotes].reduce((map, note) => {
       const previous = map.get(note.id);
       if (!previous || new Date(note.updatedAt) > new Date(previous.updatedAt)) map.set(note.id, note);
       return map;
     }, new Map());
-    const upload = [...combined.values()].map(note => ({ id: note.id, user_id: user.id, title: note.title, content: note.content, updated_at: note.updatedAt }));
+    // Descarregar primeiro evita que uma cópia antiga deste dispositivo
+    // substitua uma edição mais recente feita noutro dispositivo.
+    const { data: remoteData, error: downloadError } = await cloud.from('notes').select('id,title,content,updated_at').order('updated_at', { ascending: false });
+    if (downloadError) { saveStatus.textContent = 'Sem ligação; notas guardadas neste dispositivo'; return; }
+    const remote = remoteData.map(note => ({ id: note.id, title: note.title, content: note.content, updatedAt: note.updated_at }));
+    const remoteById = new Map(remote.map(note => [note.id, note]));
+    const pending = [...localCombined.values()].filter(note => {
+      const online = remoteById.get(note.id);
+      return !online || new Date(note.updatedAt) > new Date(online.updatedAt);
+    });
+    const upload = pending.map(note => ({ id: note.id, user_id: user.id, title: note.title, content: note.content, updated_at: note.updatedAt }));
     if (upload.length) {
       const { error } = await cloud.from('notes').upsert(upload);
       if (error) { saveStatus.textContent = 'Sem ligação; notas guardadas neste dispositivo'; return; }
     }
-    const { data, error } = await cloud.from('notes').select('id,title,content,updated_at').order('updated_at', { ascending: false });
-    if (error) { saveStatus.textContent = 'Não foi possível sincronizar'; return; }
-    notes = data.map(note => ({ id: note.id, title: note.title, content: note.content, updatedAt: note.updated_at }));
+    const merged = new Map(remote.map(note => [note.id, note]));
+    pending.forEach(note => merged.set(note.id, note));
+    notes = [...merged.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     persist();
     localStorage.removeItem(GUEST_KEY);
     renderNotes();
