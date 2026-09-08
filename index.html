@@ -2,24 +2,21 @@
 <html lang="pt-PT">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff"><meta name="description" content="Bloco de notas simples, sincronizado e instalável.">
-  <title>Notas Exclusivas Pro</title><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
+  <meta name="theme-color" content="#f3f5f7"><meta name="description" content="As suas notas, lado a lado. Bloco de notas com sincronização.">
+  <title>Notas Exclusivas Pro</title>
+  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header id="app-header">
-    <div class="brand"><img src="icon.svg" alt=""><span>Notas Exclusivas Pro</span></div>
-    <nav id="top-controls" aria-label="Ações das notas">
-      <button id="account-btn" class="icon-btn" type="button" title="Conta e sincronização" aria-label="Conta e sincronização">●</button>
-      <button id="toggle-sidebar-btn" class="icon-btn" type="button" title="Ver notas guardadas" aria-label="Ver notas guardadas">☰</button>
-      <button id="new-note-btn" class="icon-btn" type="button" title="Criar nova nota" aria-label="Criar nova nota">＋</button>
+    <div class="brand">Notas Exclusivas Pro</div>
+    <nav aria-label="Ações das notas">
+      <button id="close-note-btn" title="Guardar e fechar a nota ativa" aria-label="Fechar nota ativa">✕</button>
+      <button id="account-btn">Sincronizar / Conta</button>
+      <button id="toggle-sidebar-btn">Ver notas guardadas</button>
+      <button id="new-note-btn">＋ Nova nota</button>
     </nav>
+    <span id="save-status" role="status" aria-live="polite"></span>
   </header>
-  <div id="history-controls" aria-label="Histórico de edição">
-    <button id="undo-btn" type="button" title="Desfazer" aria-label="Desfazer">↶<span>Desfazer</span></button>
-    <button id="redo-btn" type="button" title="Refazer" aria-label="Refazer">↷<span>Refazer</span></button>
-  </div>
-  <button id="close-note-btn" class="icon-btn" type="button" title="Fechar nota" aria-label="Fechar nota">✕</button>
-
   <dialog id="auth-dialog"><form id="auth-form" method="dialog">
     <div class="dialog-heading"><h2>Sincronização</h2><button id="close-auth-btn" class="plain-btn" type="button" aria-label="Fechar">✕</button></div>
     <p id="auth-description">Entre com a mesma conta no PC e no telemóvel.</p>
@@ -35,37 +32,32 @@
     <div id="sidebar-notes-list"></div>
   </aside><div id="sidebar-backdrop" class="backdrop" hidden></div>
 
-  <main><section id="note-form" aria-label="Editor de nota">
-    <div id="note-title" contenteditable="true" role="textbox" aria-label="Título da nota" data-placeholder="Título..."></div>
-    <div id="note-text" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui..."></div>
-    <div class="bottom-actions"><span id="save-status" role="status" aria-live="polite"></span>
-      <button id="delete-btn" type="button" title="Eliminar esta nota" hidden>Eliminar</button>
-      <button id="save-btn" class="save-icon-btn" type="button" title="Guardar nota" aria-label="Guardar nota"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5V3Zm3 2v5h8V5H8Zm0 9v5h8v-5H8Z"/></svg></button>
-    </div>
-  </section></main>
 
-  <div id="custom-context-menu" class="context-menu" role="menu" aria-label="Formatar texto">
-    <div class="format-grid" aria-label="Formatação básica">
-      <button type="button" data-command="bold" title="Negrito"><strong>B</strong><span>Negrito</span></button>
-      <button type="button" data-command="underline" title="Sublinhado"><u>U</u><span>Sublinhar</span></button>
-      <button type="button" data-command="strikeThrough" title="Riscado"><s>S</s><span>Riscado</span></button>
-      <button type="button" data-case="upper" title="Maiúsculas">A<span>MAIÚSCULAS</span></button>
-      <button type="button" data-case="lower" title="Minúsculas">a<span>minúsculas</span></button>
-      <button type="button" data-command="removeFormat" title="Limpar formatação">⌫<span>Limpar</span></button>
+  <main id="workspace" aria-label="Área de trabalho das notas">
+    <div id="empty-workspace"><p>As suas notas, lado a lado.</p><span>Crie uma nota ou abra uma das notas guardadas.</span><button id="empty-new-btn">＋ Nova nota</button></div>
+  </main>
+  <div id="custom-context-menu" class="context-menu" aria-label="Opções da nota" hidden>
+    <div class="quick-actions">
+      <button data-action="copy">Copiar</button><button data-action="paste">Colar</button>
+      <button data-action="undo">↶ Desfazer</button><button data-action="redo">↷ Refazer</button>
     </div>
-    <div class="menu-divider"></div>
-    <div class="menu-section"><span>Tamanho da letra</span>
-      <div class="font-size-control"><button type="button" data-size-step="-1" aria-label="Diminuir tamanho">A−</button><input id="font-size-input" type="number" min="8" max="96" value="18" aria-label="Tamanho da letra em píxeis"><span>px</span><button type="button" data-size-step="1" aria-label="Aumentar tamanho">A＋</button><button type="button" id="apply-size-btn">Aplicar</button></div>
-      <div class="size-row"><button type="button" data-font-px="12">12</button><button type="button" data-font-px="14">14</button><button type="button" data-font-px="16">16</button><button type="button" data-font-px="18">18</button><button type="button" data-font-px="24">24</button><button type="button" data-font-px="32">32</button></div>
+    <div class="format-grid">
+      <button data-command="bold" title="Negrito"><b>B</b></button><button data-command="underline" title="Sublinhado"><u>U</u></button>
+      <button data-command="strikeThrough" title="Riscado"><s>S</s></button><button data-command="removeFormat" title="Limpar formatação">Limpar</button>
+      <button data-case="upper" title="Maiúsculas">ABC</button><button data-case="lower" title="Minúsculas">abc</button>
     </div>
-    <div class="menu-divider"></div>
-    <div class="menu-section"><span>Cor da letra</span><div class="color-row">
-      <button type="button" class="color-dot" data-color="#111111" style="--color:#111111" aria-label="Preto"></button><button type="button" class="color-dot" data-color="#e5251f" style="--color:#e5251f" aria-label="Vermelho"></button><button type="button" class="color-dot" data-color="#1565c0" style="--color:#1565c0" aria-label="Azul"></button><button type="button" class="color-dot" data-color="#188038" style="--color:#188038" aria-label="Verde"></button><button type="button" class="color-dot" data-color="#ef6c00" style="--color:#ef6c00" aria-label="Laranja"></button><button type="button" class="color-dot" data-color="#7b1fa2" style="--color:#7b1fa2" aria-label="Roxo"></button><label class="color-picker" title="Mais cores"><input id="text-color-input" type="color" value="#111111" aria-label="Escolher outra cor da letra"><span>＋</span></label>
-    </div></div>
-    <div class="menu-divider"></div>
-    <div class="menu-section"><span>Marcar texto</span><div class="color-row">
-      <button type="button" class="color-dot no-color" data-highlight="transparent" aria-label="Retirar marcação">×</button><button type="button" class="color-dot" data-highlight="#fff176" style="--color:#fff176" aria-label="Amarelo"></button><button type="button" class="color-dot" data-highlight="#80deea" style="--color:#80deea" aria-label="Azul claro"></button><button type="button" class="color-dot" data-highlight="#a5d6a7" style="--color:#a5d6a7" aria-label="Verde claro"></button><button type="button" class="color-dot" data-highlight="#f8bbd0" style="--color:#f8bbd0" aria-label="Rosa"></button><button type="button" class="color-dot" data-highlight="#ffcc80" style="--color:#ffcc80" aria-label="Laranja claro"></button><label class="color-picker" title="Mais cores"><input id="highlight-color-input" type="color" value="#fff176" aria-label="Escolher outra cor de marcação"><span>＋</span></label>
-    </div></div>
+    <details><summary>Fonte</summary><div id="font-options" class="vertical-options"></div></details>
+    <details><summary>Tamanho da letra <span id="size-label">18</span></summary><div id="size-options" class="vertical-options sizes"></div></details>
+    <details><summary>Cor da letra</summary><div id="text-palette" class="palette"></div><div class="custom-color"><input id="text-color-input" type="color" value="#171717" aria-label="Cor da letra"><button data-favorite="text">★ Guardar favorita</button></div><div id="text-favorites" class="palette" aria-label="Cores favoritas da letra"></div></details>
+    <details><summary>Marcar texto</summary><div id="highlight-palette" class="palette"></div><div class="custom-color"><input id="highlight-color-input" type="color" value="#fff176" aria-label="Cor de marcação"><button data-favorite="highlight">★ Guardar favorita</button></div><div id="highlight-favorites" class="palette" aria-label="Cores favoritas de marcação"></div></details>
+    <details><summary>Cor de fundo da nota</summary><div id="background-palette" class="palette"></div></details>
+    <details><summary>Inserir símbolos e setas</summary><div id="symbol-options" class="symbols"></div></details>
+    <button class="menu-line" data-action="image">Inserir imagem…</button>
+    <label class="text-width">Largura do texto <input id="text-width" type="range" min="25" max="100" value="100"><output id="width-label">100%</output></label>
+    <button class="menu-line" data-action="remove-object">Eliminar objeto selecionado</button>
+    <p class="menu-hint">Arraste os objetos pelo centro e redimensione pelos cantos.</p>
   </div>
+  <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
+  <dialog id="title-dialog"><form id="title-form"><div class="dialog-heading"><h2>Guardar nota</h2><button type="button" id="cancel-title" aria-label="Cancelar">✕</button></div><label>Título (opcional)<input id="optional-title" type="text" maxlength="200" placeholder="Sem título"></label><p>Pode deixar o título em branco.</p><div class="dialog-actions"><button type="button" id="keep-title">Manter título atual</button><button type="submit">Guardar</button></div></form></dialog>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="app.js"></script>
 </body></html>
