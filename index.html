@@ -10,7 +10,6 @@
   <header id="app-header">
     <div class="brand">Notas Exclusivas Pro</div>
     <nav aria-label="Ações das notas">
-      <button id="close-note-btn" title="Guardar e fechar a nota ativa" aria-label="Fechar nota ativa">✕</button>
       <button id="account-btn">Sincronizar / Conta</button>
       <button id="toggle-sidebar-btn">Ver notas guardadas</button>
       <button id="new-note-btn">＋ Nova nota</button>
@@ -34,11 +33,11 @@
 
 
   <main id="workspace" aria-label="Área de trabalho das notas">
-    <div id="empty-workspace"><p>As suas notas, lado a lado.</p><span>Crie uma nota ou abra uma das notas guardadas.</span><button id="empty-new-btn">＋ Nova nota</button></div>
+    <div id="empty-workspace" hidden><p>Nota fechada</p><span>O conteúdo guardado continua na lista de notas.</span><button id="empty-new-btn">＋ Nova nota</button></div>
   </main>
+  <div id="popup-message" role="status" hidden>O navegador bloqueou a janela. Permita pop-ups para este endereço e tente novamente. <a id="popup-fallback" target="_blank" rel="noopener">Abrir a nota num separador</a><button id="dismiss-popup" aria-label="Fechar aviso">✕</button></div>
   <div id="custom-context-menu" class="context-menu" aria-label="Opções da nota" hidden>
     <div class="quick-actions">
-      <button data-action="copy">Copiar</button><button data-action="paste">Colar</button>
       <button data-action="undo">↶ Desfazer</button><button data-action="redo">↷ Refazer</button>
     </div>
     <div class="format-grid">
@@ -48,16 +47,21 @@
     </div>
     <details><summary>Fonte</summary><div id="font-options" class="vertical-options"></div></details>
     <details><summary>Tamanho da letra <span id="size-label">18</span></summary><div id="size-options" class="vertical-options sizes"></div></details>
-    <details><summary>Cor da letra</summary><div id="text-palette" class="palette"></div><div class="custom-color"><input id="text-color-input" type="color" value="#171717" aria-label="Cor da letra"><button data-favorite="text">★ Guardar favorita</button></div><div id="text-favorites" class="palette" aria-label="Cores favoritas da letra"></div></details>
-    <details><summary>Marcar texto</summary><div id="highlight-palette" class="palette"></div><div class="custom-color"><input id="highlight-color-input" type="color" value="#fff176" aria-label="Cor de marcação"><button data-favorite="highlight">★ Guardar favorita</button></div><div id="highlight-favorites" class="palette" aria-label="Cores favoritas de marcação"></div></details>
+    <section class="persistent-palette" aria-label="Cor da letra"><div class="palette-heading">Cor da letra</div><div id="text-palette" class="palette"></div><div class="custom-color"><input id="text-color-input" type="color" value="#171717" aria-label="Cor da letra"><button data-favorite="text">★ Guardar favorita</button></div><div id="text-favorites" class="palette" aria-label="Cores favoritas da letra"></div></section>
+    <section class="persistent-palette" aria-label="Marcar texto"><div class="palette-heading">Marcar texto</div><div id="highlight-palette" class="palette"></div><div class="custom-color"><input id="highlight-color-input" type="color" value="#fff176" aria-label="Cor de marcação"><button data-favorite="highlight">★ Guardar favorita</button></div><div id="highlight-favorites" class="palette" aria-label="Cores favoritas de marcação"></div></section>
     <details><summary>Cor de fundo da nota</summary><div id="background-palette" class="palette"></div></details>
     <details><summary>Inserir símbolos e setas</summary><div id="symbol-options" class="symbols"></div></details>
     <button class="menu-line" data-action="image">Inserir imagem…</button>
+    <button class="menu-line" data-action="textbox">Inserir caixa de texto</button>
+    <button class="menu-line" data-action="link">Adicionar ligação…</button>
     <label class="text-width">Largura do texto <input id="text-width" type="range" min="25" max="100" value="100"><output id="width-label">100%</output></label>
     <button class="menu-line" data-action="remove-object">Eliminar objeto selecionado</button>
-    <p class="menu-hint">Arraste os objetos pelo centro e redimensione pelos cantos.</p>
+    <p class="menu-hint">Selecione um objeto para alterar a cor, girar ou recortar. Clique numa caixa de texto para escrever ou inserir conteúdo dentro dela.</p>
   </div>
   <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
   <dialog id="title-dialog"><form id="title-form"><div class="dialog-heading"><h2>Guardar nota</h2><button type="button" id="cancel-title" aria-label="Cancelar">✕</button></div><label>Título (opcional)<input id="optional-title" type="text" maxlength="200" placeholder="Sem título"></label><p>Pode deixar o título em branco.</p><div class="dialog-actions"><button type="button" id="keep-title">Manter título atual</button><button type="submit">Guardar</button></div></form></dialog>
+  <dialog id="crop-dialog"><div class="dialog-heading"><h2>Recortar imagem</h2><button id="cancel-crop" aria-label="Cancelar recorte">✕</button></div><p>Arraste os cantos para escolher a área visível. A imagem original será preservada.</p><div id="crop-stage"><img id="crop-source" alt="Imagem original para recorte"><div id="crop-selection"><span data-crop-corner="nw"></span><span data-crop-corner="ne"></span><span data-crop-corner="sw"></span><span data-crop-corner="se"></span></div></div><div class="crop-fields"><label>Esquerda %<input id="crop-x" type="number" min="0" max="98" step="1"></label><label>Topo %<input id="crop-y" type="number" min="0" max="98" step="1"></label><label>Largura %<input id="crop-w" type="number" min="2" max="100" step="1"></label><label>Altura %<input id="crop-h" type="number" min="2" max="100" step="1"></label></div><div class="dialog-actions"><button id="reset-crop">Imagem inteira</button><button id="apply-crop">Aplicar recorte</button></div></dialog>
+  <dialog id="link-dialog"><form id="link-form"><div class="dialog-heading"><h2>Adicionar ligação</h2><button id="cancel-link" type="button" aria-label="Cancelar ligação">✕</button></div><label>Endereço completo<input id="link-url" type="text" required placeholder="https://…"></label><label>Texto a mostrar (opcional)<input id="link-label" type="text" placeholder="Abrir página ou plano de tratamento"></label><p id="link-error" role="status"></p><div class="dialog-actions"><button type="submit">Adicionar ligação</button></div></form></dialog>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="app.js"></script>
 </body></html>
+
