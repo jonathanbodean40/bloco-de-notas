@@ -13,6 +13,7 @@
   const detachedScope = route.searchParams.get('scope') || 'guest';
   const popupHandles = new Map();
   const detached = !!detachedId;
+  const mobileNotes = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints>1 && matchMedia('(max-width:1100px)').matches);
   document.body.classList.toggle('detached',detached);
   if(config.preview){document.body.classList.add('preview');const badge=document.createElement('span');badge.className='preview-badge';badge.textContent='Pré-visualização local · notas de teste';$('#app-header .brand').append(badge);}
   const configured = /^https:\/\/.+\.supabase\.co$/.test(config.supabaseUrl || '') && /^(sb_publishable_|eyJ)/.test(config.supabasePublishableKey || '');
@@ -99,6 +100,7 @@
     if(!source||!((source.type==='image'&&safeImage(source.src))||(source.type==='symbol'&&symbols.includes(source.symbol))||(allowBox&&source.type==='textbox')))return null;
     const o={id:typeof source.id==='string'?source.id:makeId(),type:source.type,src:source.src,symbol:source.symbol,color:/^#[0-9a-f]{6}$/i.test(source.color)?source.color:'#243039',x:clamp(source.x,0,20000),y:clamp(source.y,0,20000),w:clamp(source.w,.1,100000),h:clamp(source.h,.1,100000),rotation:angle(source.rotation),crop:validCrop(source.crop)};
     o.pinned=source.pinned===true;
+    if(o.type==='textbox')o.bg=/^#[0-9a-f]{6}$/i.test(source.bg)?source.bg:'#ffffff';
     o.sourceRatio=Number(source.sourceRatio)>0?Number(source.sourceRatio):(o.w/o.h)*(o.crop.h/o.crop.w);
     if(o.type==='textbox'){o.w=Math.max(180,o.w);o.h=Math.max(120,o.h);o.html=cleanHTML(source.html||'');o.textWidth=clamp(source.textWidth||100,25,100);o.children=Array.isArray(source.children)?source.children.map(v=>decodeObject(v,false)).filter(Boolean):[];}
     return o;
@@ -182,6 +184,8 @@
     const note=notes.find(n=>n.id===id&&!n.deletedAt);if(!note)return;
     const rect=decode(note.content).popupRect||{};
     const url=new URL(location.href);url.search='';url.searchParams.set('note',id);url.searchParams.set('scope',user?.id||'guest');url.hash='';
+    // Mobile notes stay inside the installed app instead of opening a browser custom tab.
+    if(mobileNotes){if(active&&!commit(active,false))return;saveWorkspace();location.assign(url.href);return;}
     const width=clamp(rect.w||640,340,screen.availWidth||1600),height=clamp(rect.h||760,340,screen.availHeight||1000);
     const x=Number.isFinite(rect.x)?rect.x:screenX+80,y=Number.isFinite(rect.y)?rect.y:screenY+70;
     const handle=window.open(url.href,`notas-${user?.id||'guest'}-${id}`,`popup=yes,resizable=yes,scrollbars=yes,width=${width},height=${height},left=${x},top=${y}`);
@@ -200,7 +204,7 @@
     if(!pendingTitle)return;const {w,closeAfter}=pendingTitle;if(!windows.has(w.id)){$('#title-dialog').close();pendingTitle=null;return;}
     if(!keep)w.title=$('#optional-title').value.trim();display(w);
     if(!commit(w))return;
-    $('#title-dialog').close();pendingTitle=null;if(closeAfter){if(detached)window.close();else removeWindow(w);}
+    $('#title-dialog').close();pendingTitle=null;if(closeAfter){if(detached&&mobileNotes){const url=new URL(location.href);url.search='';url.hash='';location.assign(url.href);}else if(detached)window.close();else removeWindow(w);}
   }
   function deleteNoteById(id){
     const existing=notes.find(n=>n.id===id&&!n.deletedAt),w=windows.get(id);
@@ -240,12 +244,17 @@
     tools.querySelector('[data-object="select-box"]').hidden=!ownerBox(w,o.id);
     tools.querySelector('[data-rotation]').value=Math.round(angle(o.rotation));
     const pin=tools.querySelector('[data-object="pin"]');pin.hidden=o.type==='symbol';pin.textContent=o.pinned?'Desafixar':'Fixar';pin.setAttribute('aria-pressed',String(!!o.pinned));
+    const bg=tools.querySelector('.box-background');bg.hidden=o.type!=='textbox';if(o.type==='textbox')bg.querySelector('input').value=o.bg||'#ffffff';
     tools.querySelectorAll('[data-rotation],[data-object="rotate-left"],[data-object="rotate-right"],[data-object="crop"],[data-object="uncrop"]').forEach(control=>control.disabled=!!o.pinned);
     tools.querySelector('[data-object="crop"]').hidden=o.type!=='image';tools.querySelector('[data-object="uncrop"]').hidden=o.type!=='image'||(validCrop(o.crop).w===1&&validCrop(o.crop).h===1);
   }
   function setupObjectTools(w){
     const tools=w.el.querySelector('.object-tools');
     const pin=document.createElement('button');pin.dataset.object='pin';pin.textContent='Fixar';pin.title='Fixar ou libertar a posição e o tamanho do objeto';tools.insertBefore(pin,tools.querySelector('[data-object="remove"]'));
+    const bg=document.createElement('div');bg.className='box-background';bg.hidden=true;bg.innerHTML='<span>Fundo da caixa</span><div class="box-background-palette" role="group" aria-label="Cores de fundo da caixa"></div><input type="color" value="#ffffff" aria-label="Cor personalizada do fundo da caixa">';tools.append(bg);
+    const paintBox=color=>{const o=findObject(w,w.selected);if(o?.type!=='textbox'||!/^#[0-9a-f]{6}$/i.test(color))return;captureTextBoxes(w);o.bg=color;const el=[...w.paper.querySelectorAll('.text-box')].find(el=>el.dataset.objectId===o.id);if(el)el.style.backgroundColor=color;bg.querySelector('input').value=color;commit(w);};
+    Object.entries(backgrounds).forEach(([name,color])=>{const b=document.createElement('button');b.type='button';b.title=name;b.setAttribute('aria-label',`Fundo da caixa: ${name}`);b.style.backgroundColor=color;b.addEventListener('click',()=>paintBox(color));bg.querySelector('.box-background-palette').append(b);});
+    bg.querySelector('input').addEventListener('input',e=>paintBox(e.target.value));
     tools.querySelector('[data-symbol-color]').addEventListener('input',e=>setSymbolColor(w,e.target.value));
     tools.querySelector('[data-symbol-color]').addEventListener('change',e=>setSymbolColor(w,e.target.value));
     tools.querySelector('[data-rotation]').addEventListener('change',e=>{const o=findObject(w,w.selected);if(!o)return;o.rotation=angle(e.target.value);keepObjectVisible(o);display(w);commit(w);});
@@ -298,6 +307,7 @@
       el.classList.toggle('pinned',!!o.pinned);
       el.setAttribute('aria-label',o.type==='textbox'?'Caixa de texto: arraste pela barra e redimensione pelos cantos':o.type==='image'?'Imagem: selecione para girar, recortar ou redimensionar':`Símbolo ${o.symbol}: selecione para alterar a cor, girar ou redimensionar`);setObjectGeometry(el,o);
       if(o.type==='textbox'){
+        el.style.backgroundColor=o.bg||'#ffffff';
         const bar=document.createElement('div');bar.className='textbox-drag';bar.textContent='⠿ Caixa de texto · arraste aqui';
         const body=document.createElement('div');body.className='textbox-body';const canvas=document.createElement('div');canvas.className='textbox-canvas';canvas.dataset.boxId=o.id;
         const editor=document.createElement('div');editor.className='textbox-editor';editor.contentEditable='true';editor.dataset.boxId=o.id;editor.setAttribute('role','textbox');editor.setAttribute('aria-label','Texto dentro da caixa');editor.setAttribute('aria-multiline','true');editor.dataset.placeholder='Escreva aqui…';editor.innerHTML=o.html||'';
