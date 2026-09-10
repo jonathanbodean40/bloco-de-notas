@@ -14,6 +14,8 @@
       <button id="account-btn">Sincronizar / Conta</button>
       <button id="toggle-sidebar-btn">Ver notas guardadas</button>
       <button id="new-note-btn">＋ Nova nota</button>
+      <button id="shipments-btn">Envios</button>
+      <button id="reminders-btn">Lembretes</button>
     </nav>
     <span id="save-status" role="status" aria-live="polite"></span>
   </header>
@@ -60,6 +62,44 @@
     <p class="menu-hint">Selecione um objeto para alterar a cor, girar ou recortar. Clique numa caixa de texto para escrever ou inserir conteúdo dentro dela.</p>
   </div>
   <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
+  <dialog id="shipments-dialog" class="manager-dialog">
+    <div class="dialog-heading"><h2>Controlo de envios</h2><button type="button" data-close="shipments-dialog" aria-label="Fechar envios">✕</button></div>
+    <p>Registe cada caso e atualize o número do último alinhador enviado.</p>
+    <button id="new-shipment">＋ Adicionar caso nesta nota</button>
+    <label>Procurar clínica, médico ou paciente<input id="shipment-search" type="search"></label>
+    <div id="shipment-list" class="records-list"></div>
+  </dialog>
+  <dialog id="shipment-dialog" class="manager-dialog"><form id="shipment-form">
+    <div class="dialog-heading"><h2>Formulário de controlo de envio</h2><button type="button" data-close="shipment-dialog" aria-label="Fechar formulário de envio">✕</button></div>
+    <div class="form-columns">
+      <label>Nome da clínica<input name="clinic" maxlength="200"></label>
+      <label>Nome do Dr./Dra.<input name="doctor" maxlength="200"></label>
+      <label class="full-row">Paciente<input name="patient" maxlength="200" required></label>
+      <label>Total de alinhadores<input name="total" type="number" min="1" max="9999" step="1" required></label>
+      <label>Enviado até ao alinhador nº<input name="sent" type="number" min="0" max="9999" step="1" value="0" required></label>
+      <label>Data de envio<input name="sentDate" type="date"></label>
+      <label>Próximo envio previsto<input name="nextDate" type="date"></label>
+      <label class="full-row">Observações<textarea name="observations" rows="4" maxlength="5000"></textarea></label>
+    </div>
+    <p id="shipment-remaining" class="record-progress" role="status"></p><p id="shipment-error" role="alert"></p>
+    <div class="dialog-actions"><button type="submit">Guardar caso</button></div>
+  </form></dialog>
+  <dialog id="reminders-dialog" class="manager-dialog">
+    <div class="dialog-heading"><h2>Lembretes</h2><button type="button" data-close="reminders-dialog" aria-label="Fechar lembretes">✕</button></div>
+    <p id="push-status" role="status"></p>
+    <button id="enable-push">Ativar notificações neste dispositivo</button>
+    <button id="disable-push" hidden>Desativar neste dispositivo</button>
+    <p class="subtle">Os avisos no ecrã bloqueado dizem apenas que existe um lembrete. Abra a aplicação para consultar os detalhes. O som depende das definições de notificações do dispositivo.</p>
+    <button id="new-reminder">＋ Novo lembrete</button>
+    <div id="reminder-list" class="records-list"></div>
+  </dialog>
+  <dialog id="reminder-dialog" class="manager-dialog"><form id="reminder-form">
+    <div class="dialog-heading"><h2>Agendar lembrete</h2><button type="button" data-close="reminder-dialog" aria-label="Fechar agendamento">✕</button></div>
+    <label>O que pretende lembrar?<input id="reminder-label" maxlength="250" required placeholder="Ligar amanhã às 14h"></label>
+    <label>Data e hora<input id="reminder-due" type="datetime-local" required></label>
+    <p id="reminder-zone" class="subtle"></p><p id="reminder-error" role="alert"></p>
+    <div class="dialog-actions"><button type="submit">Agendar</button></div>
+  </form></dialog>
   <dialog id="title-dialog"><form id="title-form"><div class="dialog-heading"><h2>Guardar nota</h2><button type="button" id="cancel-title" aria-label="Cancelar">✕</button></div><label>Título (opcional)<input id="optional-title" type="text" maxlength="200" placeholder="Sem título"></label><p>Pode deixar o título em branco.</p><div class="dialog-actions"><button type="button" id="keep-title">Manter título atual</button><button type="submit">Guardar</button></div></form></dialog>
   <dialog id="crop-dialog"><div class="dialog-heading"><h2>Recortar imagem</h2><button id="cancel-crop" aria-label="Cancelar recorte">✕</button></div><p>Arraste os cantos para escolher a área visível. A imagem original será preservada.</p><div id="crop-stage"><img id="crop-source" alt="Imagem original para recorte"><div id="crop-selection"><span data-crop-corner="nw"></span><span data-crop-corner="ne"></span><span data-crop-corner="sw"></span><span data-crop-corner="se"></span></div></div><div class="crop-fields"><label>Esquerda %<input id="crop-x" type="number" min="0" max="98" step="1"></label><label>Topo %<input id="crop-y" type="number" min="0" max="98" step="1"></label><label>Largura %<input id="crop-w" type="number" min="2" max="100" step="1"></label><label>Altura %<input id="crop-h" type="number" min="2" max="100" step="1"></label></div><div class="dialog-actions"><button id="reset-crop">Imagem inteira</button><button id="apply-crop">Aplicar recorte</button></div></dialog>
   <dialog id="link-dialog"><form id="link-form"><div class="dialog-heading"><h2>Adicionar ligação</h2><button id="cancel-link" type="button" aria-label="Cancelar ligação">✕</button></div><label>Endereço completo<input id="link-url" type="text" required placeholder="https://…"></label><label>Texto a mostrar (opcional)<input id="link-label" type="text" placeholder="Abrir página ou plano de tratamento"></label><p id="link-error" role="status"></p><div class="dialog-actions"><button type="submit">Adicionar ligação</button></div></form></dialog>

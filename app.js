@@ -94,7 +94,7 @@
     if (root) { try { meta = JSON.parse(root.getAttribute('data-layout') || '{}'); } catch {} }
     if(!meta || typeof meta!=='object' || Array.isArray(meta))meta={};
     const objects = Array.isArray(meta.objects) ? meta.objects.map(o=>decodeObject(o)).filter(Boolean) : [];
-    return {html:cleanHTML(root ? root.querySelector('[data-note-body]')?.innerHTML || '' : content), bg:Object.values(backgrounds).includes(meta.bg) ? meta.bg : '#ffffff', textWidth:clamp(meta.textWidth || 100,25,100),objects,rect:meta.rect || null,popupRect:meta.popupRect||null};
+    return {html:cleanHTML(root ? root.querySelector('[data-note-body]')?.innerHTML || '' : content), bg:Object.values(backgrounds).includes(meta.bg) ? meta.bg : '#ffffff', textWidth:clamp(meta.textWidth || 100,25,100),objects,shipments:decodeShipments(meta.shipments),rect:meta.rect || null,popupRect:meta.popupRect||null};
   }
   function decodeObject(source,allowBox=true){
     if(!source||!((source.type==='image'&&safeImage(source.src))||(source.type==='symbol'&&symbols.includes(source.symbol))||(allowBox&&source.type==='textbox')))return null;
@@ -107,7 +107,7 @@
   }
   function encode(w) {
     const root = document.createElement('div'); root.dataset.notasPro = '3';
-    root.dataset.layout = JSON.stringify({bg:w.bg,textWidth:w.textWidth,objects:w.objects,rect:w.rect,popupRect:w.popupRect});
+    root.dataset.layout = JSON.stringify({bg:w.bg,textWidth:w.textWidth,objects:w.objects,shipments:w.shipments,rect:w.rect,popupRect:w.popupRect});
     const body = document.createElement('div'); body.dataset.noteBody = ''; body.innerHTML = w.editor.innerHTML; root.append(body);
     // A standard HTML fallback lets previous versions still display text and objects.
     const fallback = document.createElement('div'); fallback.dataset.noteObjects = '';
@@ -117,7 +117,7 @@
     return root.outerHTML;
   }
   function geometry(w) { w.el.classList.add('direct-editor'); }
-  function snapshot(w) { return JSON.stringify({html:w.editor.innerHTML,bg:w.bg,textWidth:w.textWidth,objects:w.objects}); }
+  function snapshot(w) { return JSON.stringify({html:w.editor.innerHTML,bg:w.bg,textWidth:w.textWidth,objects:w.objects,shipments:w.shipments}); }
   function commit(w, history = true) {
     if (!windows.has(w.id)) return false;
     captureTextBoxes(w);
@@ -480,7 +480,7 @@
   function changeCase(mode){if(!active)return;restoreSelection(active);const text=getSelection().toString();if(text)command('insertText',mode==='upper'?text.toLocaleUpperCase('pt-PT'):text.toLocaleLowerCase('pt-PT'));}
   function undo(w,direction){
     if(!w)return;const index=w.historyIndex+direction;if(index<0||index>=w.history.length)return;
-    const previousBox=w.editBoxId;w.historyIndex=index;const s=JSON.parse(w.history[index]);w.editor.innerHTML=s.html;w.bg=s.bg;w.textWidth=s.textWidth;w.objects=s.objects;w.selected=null;w.editBoxId=w.objects.some(o=>o.id===previousBox)?previousBox:null;savedRange=null;display(w);commit(w,false);editingSurface(w).focus();closeMenu();
+    const previousBox=w.editBoxId;w.historyIndex=index;const s=JSON.parse(w.history[index]);w.editor.innerHTML=s.html;w.bg=s.bg;w.textWidth=s.textWidth;w.objects=s.objects;w.shipments=decodeShipments(s.shipments);w.selected=null;w.editBoxId=w.objects.some(o=>o.id===previousBox)?previousBox:null;savedRange=null;display(w);commit(w,false);editingSurface(w).focus();closeMenu();
   }
   async function clipboard(paste){
     const w=active;if(!w)return;
@@ -566,7 +566,7 @@
           const n=notes.find(item=>item.id===w.id);if(!n)return;
           if(n.deletedAt){removeWindow(w);return;}
           if(n.updatedAt!==previous.get(w.id)){
-            const data=decode(n.content);w.editor.innerHTML=data.html;w.title=n.title||'';w.bg=data.bg;w.textWidth=data.textWidth;w.objects=data.objects;w.history=[snapshot(w)];w.historyIndex=0;w.selected=null;if(active===w)savedRange=null;display(w);
+            const data=decode(n.content);w.editor.innerHTML=data.html;w.title=n.title||'';w.bg=data.bg;w.textWidth=data.textWidth;w.objects=data.objects;w.shipments=data.shipments;w.history=[snapshot(w)];w.historyIndex=0;w.selected=null;if(active===w)savedRange=null;display(w);
           }
         });
         if(detached&&!active&&notes.some(n=>n.id===detachedId&&!n.deletedAt))restoreWorkspace();renderNotes();status.textContent='Sincronizado';
@@ -580,9 +580,9 @@
     $('#account-btn').classList.toggle('synced',!!user);$('#auth-message').textContent=user?`Sessão iniciada como ${user.email}`:cloud?'':'Configure o ficheiro config.js e verifique a ligação para sincronizar.';
   }
   function setSession(session){
-    const next=session?.user||null;if(next?.id===user?.id){user=next;setAuthView();return;}
+    const next=session?.user||null;reconcilePushAccount(next?.id||null);if(next?.id===user?.id){user=next;setAuthView();return;}
     saveWorkspace();sessionEpoch++;clearTimeout(syncTimer);windows.forEach(w=>w.el.remove());windows.clear();active=null;savedRange=null;closeMenu();
-    document.querySelectorAll('dialog[open]').forEach(d=>d.close());pendingTitle=null;user=next;notes=loadNotes(storageKey());$('#empty-workspace').hidden=false;setAuthView();restoreWorkspace();renderNotes();if(user)syncNotes();
+    document.querySelectorAll('dialog[open]').forEach(d=>d.close());pendingTitle=null;user=next;notes=loadNotes(storageKey());$('#empty-workspace').hidden=false;setAuthView();restoreWorkspace();renderNotes();if(user){syncNotes();if(route.searchParams.has('reminder')){$('#reminders-dialog').showModal();renderReminders();}}
   }
   $('#auth-form').addEventListener('submit',async e=>{e.preventDefault();if(!cloud)return setAuthView();try{const {error}=await cloud.auth.signInWithPassword({email:$('#auth-email').value.trim(),password:$('#auth-password').value});$('#auth-message').textContent=error?error.message:'Sessão iniciada.';$('#auth-password').value='';}catch{$('#auth-message').textContent='Não foi possível entrar. Verifique a ligação.';}});
   $('#signup-btn').addEventListener('click',async()=>{if(!cloud||!$('#auth-form').reportValidity())return;try{const {error}=await cloud.auth.signUp({email:$('#auth-email').value.trim(),password:$('#auth-password').value,options:{emailRedirectTo:location.origin+location.pathname}});$('#auth-message').textContent=error?error.message:'Conta criada. Confirme o e-mail recebido e depois entre.';}catch{$('#auth-message').textContent='Não foi possível criar a conta. Verifique a ligação.';}});
@@ -613,10 +613,118 @@
     if(e.key!==storageKey()&&!e.key?.startsWith(`${storageKey()}:entry:`))return;
     clearTimeout(storageTimer);storageTimer=setTimeout(()=>{
     const previous=new Map(notes.map(n=>[n.id,n.updatedAt]));notes=[...latestById([...notes,...loadNotes(storageKey())]).values()];
-    windows.forEach(w=>{const n=notes.find(n=>n.id===w.id);if(!n||n.updatedAt===previous.get(w.id))return;if(n.deletedAt){removeWindow(w);return;}const data=decode(n.content);w.editor.innerHTML=data.html;w.bg=data.bg;w.textWidth=data.textWidth;w.objects=data.objects;w.title=n.title||'';w.history=[snapshot(w)];w.historyIndex=0;savedRange=null;display(w);});renderNotes();scheduleSync();},35);
+    windows.forEach(w=>{const n=notes.find(n=>n.id===w.id);if(!n||n.updatedAt===previous.get(w.id))return;if(n.deletedAt){removeWindow(w);return;}const data=decode(n.content);w.editor.innerHTML=data.html;w.bg=data.bg;w.textWidth=data.textWidth;w.objects=data.objects;w.shipments=data.shipments;w.title=n.title||'';w.history=[snapshot(w)];w.historyIndex=0;savedRange=null;display(w);});renderNotes();scheduleSync();},35);
   });
   addEventListener('online',()=>{if(user)syncNotes();});addEventListener('focus',()=>{if(user)syncNotes();});
   addEventListener('resize',()=>windows.forEach(fitPaper));
+  function decodeShipments(value){
+    if(!Array.isArray(value))return [];
+    return value.filter(s=>s&&typeof s.id==='string').map(s=>({id:s.id,clinic:String(s.clinic||'').slice(0,200),doctor:String(s.doctor||'').slice(0,200),patient:String(s.patient||'').slice(0,200),total:Math.round(clamp(s.total,1,9999)),sent:Math.round(clamp(s.sent,0,9999)),sentDate:/^\d{4}-\d{2}-\d{2}$/.test(s.sentDate)?s.sentDate:'',nextDate:/^\d{4}-\d{2}-\d{2}$/.test(s.nextDate)?s.nextDate:'',observations:String(s.observations||'').slice(0,5000)}));
+  }
+  let shipmentTarget=null, reminderTarget=null, reminderAccount=null;
+  function button(text,action){const b=document.createElement('button');b.type='button';b.textContent=text;b.addEventListener('click',action);return b;}
+  function textElement(tag,text){const el=document.createElement(tag);el.textContent=text;return el;}
+  function localDate(date=new Date()){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
+  function localDateTime(date){return `${localDate(date)}T${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;}
+  function dateLabel(value){return value?new Date(`${value}T12:00:00`).toLocaleDateString('pt-PT'):'Por definir';}
+  function shipmentRecords(){return notes.filter(n=>!n.deletedAt).flatMap(n=>decode(n.content).shipments.map(s=>({note:n,s})));}
+  function openShipments(){closeMenu();if(active)commit(active);$('#shipment-search').value='';renderShipments();$('#shipments-dialog').showModal();}
+  function renderShipments(){
+    const list=$('#shipment-list');list.replaceChildren();const query=$('#shipment-search').value.toLocaleLowerCase();
+    const records=shipmentRecords().filter(({s})=>[s.patient,s.clinic,s.doctor].some(t=>t.toLocaleLowerCase().includes(query))).sort((a,b)=>Number(a.s.sent>=a.s.total)-Number(b.s.sent>=b.s.total)||(a.s.nextDate||'9999').localeCompare(b.s.nextDate||'9999'));
+    for(const {note,s} of records){
+      const card=document.createElement('article');card.className='record-card';const remaining=Math.max(0,s.total-s.sent);
+      card.append(textElement('h3',s.patient||'Paciente sem nome'),textElement('p',[s.clinic,s.doctor].filter(Boolean).join(' · ')),textElement('strong',`${s.sent} de ${s.total} enviados · ${remaining?`Faltam ${remaining}`:'Envio completo'}`),textElement('p',`Último envio: ${dateLabel(s.sentDate)} · Próximo: ${dateLabel(s.nextDate)}`));
+      if(remaining&&s.nextDate&&s.nextDate<localDate())card.append(textElement('p','Envio previsto em atraso'));
+      if(s.observations)card.append(textElement('p',s.observations));
+      const actions=document.createElement('div');actions.className='record-actions';actions.append(button('Editar caso',()=>editShipment(note.id,s)),button('Lembrar próximo envio',()=>openReminder({noteId:note.id,shipmentId:s.id,label:`Enviar alinhadores — ${s.patient}`,due:s.nextDate?`${s.nextDate}T09:00`:''})));card.append(actions);list.append(card);
+    }
+    if(!records.length)list.append(textElement('p','Nenhum caso encontrado. Adicione um caso para começar.'));
+  }
+  function editShipment(noteId,s=null){
+    shipmentTarget={noteId,id:s?.id||makeId(),epoch:sessionEpoch};const form=$('#shipment-form');form.reset();$('#shipment-error').textContent='';
+    for(const name of ['clinic','doctor','patient','total','sent','sentDate','nextDate','observations'])form.elements[name].value=s?.[name]??(name==='sent'?0:'');
+    updateRemaining();$('#shipment-dialog').showModal();
+  }
+  function updateRemaining(){const f=$('#shipment-form'),total=Number(f.elements.total.value),sent=Number(f.elements.sent.value);f.elements.sent.setCustomValidity(sent>total&&total>0?'O número enviado não pode exceder o total.':'');$('#shipment-remaining').textContent=total>0?`Faltam enviar: ${Math.max(0,total-sent)} alinhadores`:'';}
+  $('#shipments-btn').addEventListener('click',openShipments);
+  $('#shipment-search').addEventListener('input',renderShipments);
+  $('#new-shipment').addEventListener('click',()=>{if(active&&commit(active))editShipment(active.id);});
+  $('#shipment-form').addEventListener('input',updateRemaining);
+  $('#shipment-form').addEventListener('submit',e=>{
+    e.preventDefault();if(!shipmentTarget||shipmentTarget.epoch!==sessionEpoch)return;const {noteId,id}=shipmentTarget;
+    const old=notes.find(n=>n.id===noteId&&!n.deletedAt);if(!old){$('#shipment-error').textContent='A nota deste caso já não está disponível.';return;}
+    const s={id,...Object.fromEntries(new FormData(e.target))};s.total=Number(s.total);s.sent=Number(s.sent);
+    const w=windows.get(noteId);let ok;
+    if(w){captureTextBoxes(w);w.shipments=w.shipments.filter(v=>v.id!==id).concat(s);ok=commit(w);}
+    else{const data=decode(old.content),editor=document.createElement('div');editor.innerHTML=data.html;const content=encode({...data,editor,shipments:data.shipments.filter(v=>v.id!==id).concat(s)});notes[notes.indexOf(old)]={...old,content,updatedAt:timestamp(old.updatedAt)};ok=persist();if(ok)scheduleSync();}
+    if(!ok){$('#shipment-error').textContent='Não foi possível guardar. Mantenha este formulário aberto e tente novamente.';return;}
+    $('#shipment-dialog').close();renderShipments();
+  });
+  document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.close).close()));
+  async function reminderAPI(action,values={}){
+    if(!user||!cloud)throw new Error('Entre na sua conta em Sincronizar / Conta para usar os lembretes.');
+    const epoch=sessionEpoch;let result;
+    try{result=await cloud.functions.invoke('notes-reminders',{body:{action,...values}});}catch{throw new Error('Sem ligação ao serviço de lembretes. Tente novamente quando estiver online.');}
+    if(epoch!==sessionEpoch)throw new Error('A conta foi alterada. Abra os lembretes novamente.');
+    if(result.error||result.data?.error)throw new Error(result.data?.error||'O serviço de lembretes ainda não está disponível. É necessário concluir a configuração do servidor.');
+    return result.data;
+  }
+  function reconcilePushAccount(nextId){
+    const key=GUEST_KEY+':push-owner';let owner;try{owner=localStorage.getItem(key);}catch{return;}
+    if(owner&&owner!==nextId&&'serviceWorker' in navigator){localStorage.removeItem(key);navigator.serviceWorker.getRegistration().then(r=>r?.pushManager.getSubscription()).then(s=>s?.unsubscribe()).catch(()=>{});}
+  }
+  async function pushRegistration(){
+    if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window))throw new Error('Este navegador não suporta estes avisos. Use a aplicação instalada a partir do Chrome ou Safari.');
+    const reg=await navigator.serviceWorker.getRegistration();if(!reg?.active)throw new Error('Reabra a aplicação online para concluir a instalação das notificações.');return reg;
+  }
+  async function renderReminders(){
+    const epoch=sessionEpoch;$('#push-status').textContent='A consultar lembretes…';$('#reminder-list').replaceChildren();$('#disable-push').hidden=true;
+    try{
+      const data=await reminderAPI('list');if(epoch!==sessionEpoch)return;
+      let subscribed=false;try{const sub=await (await pushRegistration()).pushManager.getSubscription();subscribed=!!sub&&(data.endpoints||[]).includes(sub.endpoint);}catch{}
+      $('#push-status').textContent=subscribed?'Notificações ativadas neste dispositivo.':(data.devices?'Ative as notificações neste dispositivo. Já existem outros dispositivos ativados na sua conta.':'Ainda não existem dispositivos ativados. Ative as notificações para receber os avisos.');
+      $('#disable-push').hidden=!subscribed;
+      const list=$('#reminder-list');for(const r of data.reminders||[]){
+        const card=document.createElement('article');card.className='record-card';card.append(textElement('h3',r.label),textElement('p',new Date(r.due_at).toLocaleString('pt-PT')));
+        const labels={scheduled:'Agendado',sent:'Aviso enviado',completed:'Concluído',cancelled:'Cancelado'};card.append(textElement('strong',labels[r.status]||r.status));
+        if(r.status==='scheduled'&&Date.parse(r.due_at)<Date.now())card.append(textElement('p','Hora atingida. A entrega depende da ligação e das permissões dos dispositivos.'));
+        if(['scheduled','sent'].includes(r.status)){
+          const actions=document.createElement('div');actions.className='record-actions';
+          actions.append(button('Concluir',()=>changeReminder(r.id,'complete')),button('Reagendar',()=>openReminder({id:r.id,label:r.label,noteId:r.note_id,shipmentId:r.shipment_id,due:localDateTime(new Date(Math.max(Date.now()+3600000,Date.parse(r.due_at))))})),button('Cancelar lembrete',()=>changeReminder(r.id,'cancel')));card.append(actions);
+        }list.append(card);
+      }if(!list.children.length)list.append(textElement('p','Ainda não existem lembretes.'));
+    }catch(error){if(epoch===sessionEpoch)$('#push-status').textContent=error.message;}
+  }
+  async function changeReminder(id,action){try{await reminderAPI(action,{id});await renderReminders();}catch(e){$('#push-status').textContent=e.message;}}
+  function openReminder(target={}){
+    reminderTarget={...target};reminderAccount=sessionEpoch;$('#reminder-label').value=target.label||'';$('#reminder-due').value=target.due||localDateTime(new Date(Date.now()+3600000));
+    $('#reminder-zone').textContent=`Hora deste dispositivo: ${Intl.DateTimeFormat().resolvedOptions().timeZone}. O aviso chegará aos dispositivos ativados na sua conta.`;
+    $('#reminder-error').textContent='';$('#reminder-dialog').showModal();
+  }
+  $('#reminders-btn').addEventListener('click',()=>{closeMenu();$('#reminders-dialog').showModal();renderReminders();});
+  $('#new-reminder').addEventListener('click',()=>openReminder({noteId:active?.id||null}));
+  $('#enable-push').addEventListener('click',async()=>{
+    const b=$('#enable-push'),epoch=sessionEpoch;b.disabled=true;
+    try{
+      if(!user)throw new Error('Entre na sua conta em Sincronizar / Conta.');
+      if(!('Notification' in window))throw new Error('Este navegador não suporta notificações.');
+      const permission=await Notification.requestPermission();if(permission!=='granted')throw new Error('As notificações não foram permitidas. Pode autorizá-las nas definições do navegador.');
+      const {publicKey}=await reminderAPI('settings'),reg=await pushRegistration();
+      const raw=atob(publicKey.replace(/-/g,'+').replace(/_/g,'/')),key=Uint8Array.from(raw,c=>c.charCodeAt(0));
+      let sub=await reg.pushManager.getSubscription();if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+      if(epoch!==sessionEpoch){await sub.unsubscribe();return;}
+      await reminderAPI('subscribe',{subscription:sub.toJSON()});localStorage.setItem(`${GUEST_KEY}:push-owner`,user.id);await renderReminders();
+    }catch(e){$('#push-status').textContent=e.message;}finally{b.disabled=false;}
+  });
+  $('#disable-push').addEventListener('click',async()=>{try{const sub=await (await pushRegistration()).pushManager.getSubscription();if(sub){await reminderAPI('unsubscribe',{endpoint:sub.endpoint});await sub.unsubscribe();}await renderReminders();}catch(e){$('#push-status').textContent=e.message;}});
+  $('#reminder-form').addEventListener('submit',async e=>{
+    e.preventDefault();const due=new Date($('#reminder-due').value),label=$('#reminder-label').value.trim(),submit=e.target.querySelector('[type=submit]');
+    if(!label||!Number.isFinite(due.getTime())||due.getTime()<=Date.now()){$('#reminder-error').textContent='Indique uma descrição e uma data/hora futura.';return;}
+    if(reminderAccount!==sessionEpoch)return;submit.disabled=true;const epoch=sessionEpoch;
+    try{await reminderAPI('save',{id:reminderTarget.id||makeId(),label,dueAt:due.toISOString(),noteId:reminderTarget.noteId||null,shipmentId:reminderTarget.shipmentId||null});if(epoch!==sessionEpoch)return;$('#reminder-dialog').close();if(!$('#reminders-dialog').open)$('#reminders-dialog').showModal();await renderReminders();}catch(error){$('#reminder-error').textContent=error.message;}finally{submit.disabled=false;}
+  });
+
   setupMenu();setupCropAndLinks();setAuthView();restoreWorkspace();renderNotes();
   if(cloud){cloud.auth.getSession().then(({data})=>setSession(data.session)).catch(()=>{status.textContent='Sem ligação à conta; notas disponíveis neste dispositivo.';});cloud.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>setSession(session),0);});}
   if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').then(reg=>reg.update()).catch(()=>{}));
