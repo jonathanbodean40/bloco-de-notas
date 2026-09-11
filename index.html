@@ -11,9 +11,10 @@
   <header id="app-header">
     <div class="brand">Notas Exclusivas Pro</div>
     <nav aria-label="Ações das notas">
-      <button id="account-btn">Sincronizar / Conta</button>
-      <button id="toggle-sidebar-btn">Ver notas guardadas</button>
-      <button id="new-note-btn">＋ Nova nota</button>
+      <button id="account-btn">Conta</button>
+      <button id="sync-icon-btn" aria-label="Sincronizar" title="Sincronizar">⟳</button>
+      <button id="toggle-sidebar-btn">Notas</button>
+      <button id="new-note-btn">＋ Nova nota</button><button id="new-onyx-btn">＋ Nota OnyxCeph</button>
       <button id="shipments-btn">Envios</button>
       <button id="reminders-btn">Lembretes</button>
     </nav>
@@ -31,6 +32,7 @@
 
   <aside id="sidebar" class="sidebar" aria-label="Notas guardadas" aria-hidden="true">
     <div class="sidebar-header"><h2>Notas</h2><button id="close-sidebar-btn" class="plain-btn" type="button" aria-label="Fechar lista de notas">✕</button></div>
+    <button id="trash-btn">Notas excluídas</button>
     <div id="sidebar-notes-list"></div>
   </aside><div id="sidebar-backdrop" class="backdrop" hidden></div>
 
@@ -59,8 +61,10 @@
     <button class="menu-line" data-action="link">Adicionar ligação…</button>
     <label class="text-width">Largura do texto <input id="text-width" type="range" min="25" max="100" value="100"><output id="width-label">100%</output></label>
     <button class="menu-line" data-action="remove-object">Eliminar objeto selecionado</button>
-    <p class="menu-hint">Selecione um objeto para alterar a cor, girar ou recortar. Clique numa caixa de texto para escrever ou inserir conteúdo dentro dela.</p>
+    <p class="menu-hint">Para mover imagens em conjunto: clique em Selecionar imagens, toque nas imagens, termine a seleção e arraste uma delas. No PC também pode usar Ctrl+clique. Selecione um objeto para alterar a cor, girar ou recortar. Clique numa caixa de texto para escrever ou inserir conteúdo dentro dela.</p>
   </div>
+  <dialog id="share-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Compartilhar nota</h2><button data-close="share-dialog" aria-label="Fechar partilha">✕</button></div><p id="share-message" role="status"></p><button id="create-share">Criar link da cópia</button><div id="share-result" hidden><label>Link da nota<input id="share-link" readonly></label><div class="dialog-actions"><button id="copy-share">Copiar link</button><button id="whatsapp-share">WhatsApp</button><button id="email-share">E-mail</button><button id="system-share">Outras aplicações</button></div></div></dialog>
+  <dialog id="receive-dialog" class="manager-dialog"><div class="dialog-heading"><h2 id="receive-title">Nota recebida</h2><button data-close="receive-dialog" aria-label="Fechar nota recebida">✕</button></div><p id="receive-message" role="status"></p><p id="receive-preview" style="white-space:pre-wrap;max-height:40vh;overflow:auto"></p><button id="import-share" disabled>Guardar no meu bloco</button></dialog>
   <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
   <dialog id="shipments-dialog" class="manager-dialog">
     <div class="dialog-heading"><h2>Controlo de envios</h2><button type="button" data-close="shipments-dialog" aria-label="Fechar envios">✕</button></div>
@@ -87,8 +91,6 @@
   <dialog id="reminders-dialog" class="manager-dialog">
     <div class="dialog-heading"><h2>Lembretes</h2><button type="button" data-close="reminders-dialog" aria-label="Fechar lembretes">✕</button></div>
     <p id="push-status" role="status"></p>
-    <button id="enable-push">Ativar notificações neste dispositivo</button>
-    <button id="disable-push" hidden>Desativar neste dispositivo</button>
     <p class="subtle">Os avisos no ecrã bloqueado dizem apenas que existe um lembrete. Abra a aplicação para consultar os detalhes. O som depende das definições de notificações do dispositivo.</p>
     <button id="new-reminder">＋ Novo lembrete</button>
     <div id="reminder-list" class="records-list"></div>
@@ -100,7 +102,9 @@
     <p id="reminder-zone" class="subtle"></p><p id="reminder-error" role="alert"></p>
     <div class="dialog-actions"><button type="submit">Agendar</button></div>
   </form></dialog>
-  <dialog id="title-dialog"><form id="title-form"><div class="dialog-heading"><h2>Guardar nota</h2><button type="button" id="cancel-title" aria-label="Cancelar">✕</button></div><label>Título (opcional)<input id="optional-title" type="text" maxlength="200" placeholder="Sem título"></label><p>Pode deixar o título em branco.</p><div class="dialog-actions"><button type="button" id="keep-title">Manter título atual</button><button type="submit">Guardar</button></div></form></dialog>
+  <dialog id="trash-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Notas excluídas</h2><button data-close="trash-dialog" aria-label="Fechar notas excluídas">✕</button></div><p>Restaurar recupera a última versão guardada.</p><div id="trash-list" class="records-list"></div></dialog>
+  <dialog id="folders-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Pastas dentro da nota</h2><button data-close="folders-dialog" aria-label="Fechar pastas">✕</button></div><p id="folders-note"></p><form id="folder-form"><label>Nome da nova pasta<input id="folder-name" maxlength="120" required></label><button type="submit">Criar pasta</button></form><p id="folders-status" role="status"></p><div id="folder-list" class="records-list"></div><div class="dialog-actions"><button id="save-folders">Guardar nota</button></div></dialog>
+  <dialog id="folder-notes-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Adicionar nota à pasta</h2><button data-close="folder-notes-dialog" aria-label="Fechar seleção de notas">✕</button></div><p>A nota escolhida abrirá para revisão. Clique em Guardar nessa nota para confirmar a pasta.</p><div id="folder-note-choices" class="records-list"></div></dialog>
   <dialog id="crop-dialog"><div class="dialog-heading"><h2>Recortar imagem</h2><button id="cancel-crop" aria-label="Cancelar recorte">✕</button></div><p>Arraste os cantos para escolher a área visível. A imagem original será preservada.</p><div id="crop-stage"><img id="crop-source" alt="Imagem original para recorte"><div id="crop-selection"><span data-crop-corner="nw"></span><span data-crop-corner="ne"></span><span data-crop-corner="sw"></span><span data-crop-corner="se"></span></div></div><div class="crop-fields"><label>Esquerda %<input id="crop-x" type="number" min="0" max="98" step="1"></label><label>Topo %<input id="crop-y" type="number" min="0" max="98" step="1"></label><label>Largura %<input id="crop-w" type="number" min="2" max="100" step="1"></label><label>Altura %<input id="crop-h" type="number" min="2" max="100" step="1"></label></div><div class="dialog-actions"><button id="reset-crop">Imagem inteira</button><button id="apply-crop">Aplicar recorte</button></div></dialog>
   <dialog id="link-dialog"><form id="link-form"><div class="dialog-heading"><h2>Adicionar ligação</h2><button id="cancel-link" type="button" aria-label="Cancelar ligação">✕</button></div><label>Endereço completo<input id="link-url" type="text" required placeholder="https://…"></label><label>Texto a mostrar (opcional)<input id="link-label" type="text" placeholder="Abrir página ou plano de tratamento"></label><p id="link-error" role="status"></p><div class="dialog-actions"><button type="submit">Adicionar ligação</button></div></form></dialog>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="app.js"></script>
