@@ -14,7 +14,7 @@
       <button id="account-btn">Conta</button>
       <button id="sync-icon-btn" aria-label="Sincronizar" title="Sincronizar">⟳</button>
       <button id="toggle-sidebar-btn">Notas</button>
-      <button id="new-note-btn">＋ Nova nota</button><button id="new-onyx-btn">＋ Nota OnyxCeph</button>
+      <button id="new-note-btn">＋ Nova nota</button>
       <button id="shipments-btn">Envios</button>
       <button id="reminders-btn">Lembretes</button>
     </nav>
@@ -46,25 +46,27 @@
       <button data-action="undo">↶ Desfazer</button><button data-action="redo">↷ Refazer</button>
     </div>
     <div class="format-grid">
-      <button data-command="bold" title="Negrito"><b>B</b></button><button data-command="underline" title="Sublinhado"><u>U</u></button>
+      <button data-command="bold" title="Negrito"><b>B</b></button><button data-command="italic" title="Itálico" aria-label="Itálico"><i>I</i></button><button data-command="underline" title="Sublinhado"><u>U</u></button>
       <button data-command="strikeThrough" title="Riscado"><s>S</s></button><button data-command="removeFormat" title="Limpar formatação">Limpar</button>
-      <button data-case="upper" title="Maiúsculas">ABC</button><button data-case="lower" title="Minúsculas">abc</button>
+      <button data-case="upper" title="Maiúsculas">ABC</button><button data-case="title" title="Iniciais maiúsculas">Abc Def</button><button data-case="lower" title="Minúsculas">abc</button>
     </div>
     <details><summary>Fonte</summary><div id="font-options" class="vertical-options"></div></details>
-    <details><summary>Tamanho da letra <span id="size-label">18</span></summary><div id="size-options" class="vertical-options sizes"></div></details>
-    <section class="persistent-palette" aria-label="Cor da letra"><div class="palette-heading">Cor da letra</div><div id="text-palette" class="palette"></div><div class="custom-color"><input id="text-color-input" type="color" value="#171717" aria-label="Cor da letra"><button data-favorite="text">★ Guardar favorita</button></div><div id="text-favorites" class="palette" aria-label="Cores favoritas da letra"></div></section>
-    <section class="persistent-palette" aria-label="Marcar texto"><div class="palette-heading">Marcar texto</div><div id="highlight-palette" class="palette"></div><div class="custom-color"><input id="highlight-color-input" type="color" value="#fff176" aria-label="Cor de marcação"><button data-favorite="highlight">★ Guardar favorita</button></div><div id="highlight-favorites" class="palette" aria-label="Cores favoritas de marcação"></div></section>
+    <details><summary>Tamanho da letra <span id="size-label">13</span></summary><div id="size-options" class="vertical-options sizes"></div></details>
+    <section class="persistent-palette" aria-label="Cor da letra"><div class="palette-heading">Cor da letra</div><div id="text-palette" class="palette"></div><div class="custom-color"><input id="text-color-input" type="color" value="#171717" aria-label="Cor da letra"><button data-custom-color="text">Personalizar…</button><button data-favorite="text">★ Guardar favorita</button></div><div id="text-favorites" class="palette" aria-label="Cores favoritas da letra"></div></section>
+    <section class="persistent-palette" aria-label="Marcar texto"><div class="palette-heading">Marcar texto</div><div id="highlight-palette" class="palette"></div><div class="custom-color"><input id="highlight-color-input" type="color" value="#fff176" aria-label="Cor de marcação"><button data-custom-color="highlight">Personalizar…</button><button data-favorite="highlight">★ Guardar favorita</button></div><div id="highlight-favorites" class="palette" aria-label="Cores favoritas de marcação"></div></section>
     <details><summary>Cor de fundo da nota</summary><div id="background-palette" class="palette"></div></details>
     <details><summary>Inserir símbolos e setas</summary><div id="symbol-options" class="symbols"></div></details>
     <button class="menu-line" data-action="image">Inserir imagem…</button>
     <button class="menu-line" data-action="textbox">Inserir caixa de texto</button>
     <button class="menu-line" data-action="link">Adicionar ligação…</button>
-    <label class="text-width">Largura do texto <input id="text-width" type="range" min="25" max="100" value="100"><output id="width-label">100%</output></label>
+    <label class="spelling-setting">Correção ortográfica<select id="spelling-language"><option value="auto">Automática: PT + EN + ES (prioridade PT)</option><option value="pt">Português (Portugal)</option><option value="en">English</option><option value="es">Español</option><option value="off">Desativada</option></select></label><p id="spelling-status" class="menu-hint">A preparar dicionários locais…</p><button class="menu-line" id="names-config">Nomes automáticos…</button><label class="text-width">Largura do texto <input id="text-width" type="range" min="25" max="100" value="100"><output id="width-label">100%</output></label>
     <button class="menu-line" data-action="remove-object">Eliminar objeto selecionado</button>
     <p class="menu-hint">Para mover imagens em conjunto: clique em Selecionar imagens, toque nas imagens, termine a seleção e arraste uma delas. No PC também pode usar Ctrl+clique. Selecione um objeto para alterar a cor, girar ou recortar. Clique numa caixa de texto para escrever ou inserir conteúdo dentro dela.</p>
   </div>
   <dialog id="share-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Compartilhar nota</h2><button data-close="share-dialog" aria-label="Fechar partilha">✕</button></div><p id="share-message" role="status"></p><button id="create-share">Criar link da cópia</button><div id="share-result" hidden><label>Link da nota<input id="share-link" readonly></label><div class="dialog-actions"><button id="copy-share">Copiar link</button><button id="whatsapp-share">WhatsApp</button><button id="email-share">E-mail</button><button id="system-share">Outras aplicações</button></div></div></dialog>
   <dialog id="receive-dialog" class="manager-dialog"><div class="dialog-heading"><h2 id="receive-title">Nota recebida</h2><button data-close="receive-dialog" aria-label="Fechar nota recebida">✕</button></div><p id="receive-message" role="status"></p><p id="receive-preview" style="white-space:pre-wrap;max-height:40vh;overflow:auto"></p><button id="import-share" disabled>Guardar no meu bloco</button></dialog>
+  <dialog id="names-dialog"><div class="dialog-heading"><h2>Nomes automáticos</h2><button data-close="names-dialog" aria-label="Fechar nomes">×</button></div><p>Escreva os nomes que usa, um por linha. Ao terminar de escrever um destes nomes, a inicial será corrigida. Para nomes compostos, indique cada palavra numa linha.</p><textarea id="names-list" rows="8" aria-label="Lista de nomes"></textarea><p id="names-message"></p><button id="names-save">Guardar nomes</button></dialog>
+  <dialog id="colors-dialog"><div class="dialog-heading"><h2>Cores personalizadas</h2><button data-close="colors-dialog" aria-label="Cancelar cor">×</button></div><div class="color-picker-layout"><div><div id="color-spectrum" aria-label="Escolher saturação e brilho"><span id="color-point"></span></div><label>Matiz<input id="color-hue" type="range" min="0" max="359" value="0"></label></div><div class="rgb-fields"><label>Vermelho<input id="color-r" type="number" min="0" max="255"></label><label>Verde<input id="color-g" type="number" min="0" max="255"></label><label>Azul<input id="color-b" type="number" min="0" max="255"></label><label>Hexadecimal<input id="color-hex" maxlength="7"></label><div class="color-previews"><div>Atual<span id="color-current"></span></div><div>Nova<span id="color-new"></span></div></div></div></div><div class="dialog-actions"><button data-close="colors-dialog">Cancelar</button><button id="color-apply">Aplicar</button></div></dialog>
   <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden>
   <dialog id="shipments-dialog" class="manager-dialog">
     <div class="dialog-heading"><h2>Controlo de envios</h2><button type="button" data-close="shipments-dialog" aria-label="Fechar envios">✕</button></div>
