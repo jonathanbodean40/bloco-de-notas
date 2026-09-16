@@ -30,3 +30,10 @@ body:has(.note-maximized:not(.note-minimized)) #workspace{z-index:50}body:has(.n
 #spelling-suggestions{position:fixed;z-index:100000;display:flex;align-items:center;flex-wrap:wrap;gap:5px;max-width:min(420px,calc(100vw - 16px));padding:8px;background:white;border:1px solid #b9cbd0;border-radius:9px;box-shadow:0 4px 18px #0002;font:13px Arial,sans-serif;color:#23434c}
 #spelling-suggestions[hidden]{display:none}
 #spelling-suggestions button{padding:7px;border:1px solid #d3e0e3;border-radius:5px;background:#f5fafb;color:#183b46;cursor:pointer}
+/* Touch selection remains native; formatting is explicitly opened in a dock. */
+.close-mobile-format{display:none}
+body.mobile-format-open{--format-dock:40dvh}
+body.mobile-format-open #workspace{bottom:var(--format-dock)!important}
+#custom-context-menu.mobile-format-menu{position:fixed;left:0!important;right:0!important;top:auto!important;bottom:0!important;width:100%!important;max-width:none!important;height:40dvh;max-height:40dvh!important;border-radius:12px 12px 0 0;overflow-y:auto;overscroll-behavior:contain;padding-bottom:max(12px,env(safe-area-inset-bottom));user-select:none;-webkit-user-select:none}
+.mobile-format-menu .close-mobile-format{display:block;position:sticky;top:0;margin:0 0 8px auto;z-index:2;background:#fff}
+.mobile-format-menu .color-dot{min-width:30px;min-height:30px}

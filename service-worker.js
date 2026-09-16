@@ -1,4 +1,4 @@
-const CACHE='notas-pro-v27-full-hunspell';
+const CACHE='notas-pro-v28-mobile-selection';
 const FILES=['./','./index.html','./style.css','./app.js','./spell-worker.js','./config.js','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('notas-pro-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
@@ -27,6 +27,7 @@ self.addEventListener('notificationclick',event=>{
   // A new main app view avoids replacing unsaved text in an existing editor.
   event.waitUntil(self.clients.openWindow(url.href));
 });
+
 
 
 
