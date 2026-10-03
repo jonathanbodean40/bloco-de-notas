@@ -3,12 +3,14 @@ Unit and integration tests for dental_mesh_trimmer.
 """
 
 import os
+import io
 import tempfile
 import pytest
 import numpy as np
 import trimesh
 
 from dental_mesh_trimmer.processor import DentalMeshProcessor
+from dental_mesh_trimmer.web_app import app
 
 
 def create_synthetic_dental_mesh():
@@ -64,8 +66,6 @@ def test_trim_by_plane():
     assert np.isclose(new_z_max, initial_z_max, atol=1e-3)
 
 
-test_dimensional_preservation_data = []
-
 def test_dimensional_preservation():
     """
     Critical requirement: Verify that dental tooth geometry in retained region
@@ -108,3 +108,21 @@ def test_cli_execution():
 
         loaded = trimesh.load_mesh(output_file)
         assert len(loaded.vertices) > 0
+
+
+def test_web_app_upload():
+    combined, _, _ = create_synthetic_dental_mesh()
+    stl_bytes = io.BytesIO()
+    combined.export(stl_bytes, file_type='stl')
+    stl_bytes.seek(0)
+
+    client = app.test_client()
+    data = {
+        'files': (stl_bytes, 'test_mesh.stl'),
+        'cut_percentile': '20',
+        'create_base': 'true'
+    }
+
+    response = client.post('/process', data=data, content_type='multipart/form-data')
+    assert response.status_code == 200
+    assert len(response.data) > 0

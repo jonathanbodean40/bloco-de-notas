@@ -10,11 +10,13 @@ setup(
         "trimesh",
         "numpy",
         "scipy",
-        "shapely"
+        "shapely",
+        "flask"
     ],
     entry_points={
         "console_scripts": [
             "dental-trimmer=dental_mesh_trimmer.cli:main",
+            "dental-trimmer-gui=dental_mesh_trimmer.web_app:start_gui",
         ],
     },
     python_requires=">=3.8",
