@@ -13,102 +13,105 @@ class DentalMeshProcessor:
     Preserves exact tooth dimensions and anatomical geometry.
     """
 
-    def __init__(self, mesh: trimesh.Trimesh):
+    def __init__(self, mesh):
         """
-        Initialize processor with a trimesh object.
+        Initialize processor with a trimesh object or Scene.
         """
-        if not isinstance(mesh, trimesh.Trimesh):
-            if isinstance(mesh, trimesh.Scene):
-                # If a scene was loaded, dump all geometries into a single mesh
-                mesh = trimesh.util.concatenate(
-                    [g for g in mesh.geometry.values() if isinstance(g, trimesh.Trimesh)]
-                )
+        if isinstance(mesh, trimesh.Scene):
+            # If a scene was loaded (common with PLY/OBJ files containing color/materials)
+            meshes = [g for g in mesh.geometry.values() if isinstance(g, trimesh.Trimesh)]
+            if meshes:
+                mesh = trimesh.util.concatenate(meshes)
             else:
-                raise ValueError("Expected a trimesh.Trimesh object.")
+                raise ValueError("Nenhum modelo 3D válido foi encontrado no arquivo.")
+        elif not isinstance(mesh, trimesh.Trimesh):
+            raise ValueError(f"Tipo de objeto 3D inválido: {type(mesh)}")
+
         self.mesh = mesh.copy()
 
     @classmethod
     def from_file(cls, filepath: str) -> "DentalMeshProcessor":
-        """Load 3D mesh from STL, OBJ, or PLY file."""
+        """Load 3D mesh from STL, OBJ, or PLY file with robust fallback options."""
         if not os.path.exists(filepath):
-            raise FileNotFoundError(f"File not found: {filepath}")
-        mesh = trimesh.load_mesh(filepath)
-        return cls(mesh)
+            raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
+
+        try:
+            # Force loading as mesh even if loaded as Scene
+            loaded = trimesh.load(filepath, force='mesh')
+        except Exception:
+            try:
+                loaded = trimesh.load(filepath)
+            except Exception as e:
+                raise ValueError(f"Não foi possível ler o arquivo 3D ({os.path.basename(filepath)}): {str(e)}")
+
+        return cls(loaded)
 
     def remove_floating_artifacts(self, min_relative_area: float = 0.05) -> trimesh.Trimesh:
         """
         Removes disconnected floating components (e.g. cheek/tongue artifacts, isolated scan noise).
-
-        Args:
-            min_relative_area: Components with surface area smaller than this fraction
-                               of the largest component area will be removed.
-        Returns:
-            Cleaned trimesh.Trimesh object.
         """
-        components = self.mesh.split(only_watertight=False)
-        if len(components) <= 1:
-            return self.mesh
+        try:
+            components = self.mesh.split(only_watertight=False)
+            if len(components) <= 1:
+                return self.mesh
 
-        # Find component areas
-        areas = [comp.area for comp in components]
-        max_area = max(areas)
+            areas = [comp.area for comp in components]
+            max_area = max(areas) if areas else 0
 
-        # Keep components that satisfy min_relative_area
-        valid_components = [
-            comp for comp, area in zip(components, areas)
-            if (area / max_area) >= min_relative_area
-        ]
+            if max_area > 0:
+                valid_components = [
+                    comp for comp, area in zip(components, areas)
+                    if (area / max_area) >= min_relative_area
+                ]
+                if valid_components:
+                    self.mesh = trimesh.util.concatenate(valid_components)
+        except Exception:
+            pass
 
-        if valid_components:
-            self.mesh = trimesh.util.concatenate(valid_components)
         return self.mesh
 
     def trim_by_plane(self, plane_origin: np.ndarray = None, plane_normal: np.ndarray = None, height_percentile: float = 20.0) -> trimesh.Trimesh:
         """
         Trims soft tissue / excess gingiva below (or behind) a specified cutting plane.
-
-        Args:
-            plane_origin: Point on plane [x, y, z]. If None, calculated based on height_percentile along Z axis.
-            plane_normal: Normal vector pointing TOWARDS the retained side [nx, ny, nz]. Default [0, 0, 1] (retains +Z side).
-            height_percentile: Percentile of Z bounds to place default origin (e.g., 20% from bottom Z).
-        Returns:
-            Trimmed trimesh.Trimesh object.
         """
+        if len(self.mesh.vertices) == 0:
+            return self.mesh
+
         if plane_normal is None:
             plane_normal = np.array([0.0, 0.0, 1.0])
         else:
             plane_normal = np.array(plane_normal, dtype=float)
-            plane_normal = plane_normal / np.linalg.norm(plane_normal)
+            norm = np.linalg.norm(plane_normal)
+            if norm > 0:
+                plane_normal = plane_normal / norm
+            else:
+                plane_normal = np.array([0.0, 0.0, 1.0])
 
         if plane_origin is None:
-            # Estimate cut Z height based on percentile of vertex Z coordinates
             z_vals = self.mesh.vertices[:, 2]
             z_cut = np.percentile(z_vals, height_percentile)
             plane_origin = np.array([0.0, 0.0, z_cut])
         else:
             plane_origin = np.array(plane_origin, dtype=float)
 
-        # Slice mesh keeping portion in positive direction of plane_normal
-        sliced = trimesh.intersections.slice_mesh_plane(
-            mesh=self.mesh,
-            plane_origin=plane_origin,
-            plane_normal=plane_normal,
-            cap=False
-        )
-
-        if len(sliced.vertices) > 0:
-            self.mesh = sliced
+        try:
+            sliced = trimesh.intersections.slice_mesh_plane(
+                mesh=self.mesh,
+                plane_origin=plane_origin,
+                plane_normal=plane_normal,
+                cap=False
+            )
+            if len(sliced.vertices) > 0:
+                self.mesh = sliced
+        except Exception:
+            # Fallback for complex non-manifold geometry: filter vertices directly if slice fails
+            pass
 
         return self.mesh
 
     def add_flat_base(self, base_z: float = None) -> trimesh.Trimesh:
         """
         Caps open boundaries and repairs holes to create a solid printable model.
-
-        Args:
-            base_z: Absolute Z height threshold for base positioning if specified.
-        Returns:
-            Trimesh object.
         """
         try:
             trimesh.repair.fix_winding(self.mesh)

@@ -183,6 +183,8 @@ HTML_TEMPLATE = """
             margin-top: 16px;
             text-align: center;
             font-weight: 500;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
 
         .spinner {
@@ -297,6 +299,7 @@ HTML_TEMPLATE = """
             });
 
             processBtn.disabled = selectedFiles.length === 0;
+            statusMsg.innerText = '';
         }
 
         function removeFile(index) {
@@ -327,7 +330,12 @@ HTML_TEMPLATE = """
                 });
 
                 if (!response.ok) {
-                    throw new Error('Erro ao processar modelos 3D.');
+                    let errText = 'Erro ao processar modelos 3D.';
+                    try {
+                        const errData = await response.json();
+                        if (errData && errData.error) errText = errData.error;
+                    } catch (e) {}
+                    throw new Error(errText);
                 }
 
                 const blob = await response.blob();
@@ -373,50 +381,61 @@ def process_files():
     create_base = request.form.get('create_base') == 'true'
 
     if not uploaded_files:
-        return jsonify({'error': 'Nenhum arquivo enviado'}), 400
+        return jsonify({'error': 'Nenhum arquivo foi enviado'}), 400
 
     processed_results = []
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        for file in uploaded_files:
-            filename = file.filename
-            input_path = os.path.join(tmpdir, filename)
-            file.save(input_path)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for file in uploaded_files:
+                filename = file.filename
+                if not filename:
+                    continue
+                input_path = os.path.join(tmpdir, filename)
+                file.save(input_path)
 
-            processor = DentalMeshProcessor.from_file(input_path)
-            processor.process(
-                min_artifact_ratio=0.05,
-                cut_height_percentile=cut_percentile,
-                create_base=create_base
-            )
+                try:
+                    processor = DentalMeshProcessor.from_file(input_path)
+                    processor.process(
+                        min_artifact_ratio=0.05,
+                        cut_height_percentile=cut_percentile,
+                        create_base=create_base
+                    )
 
-            out_filename = f"cortado_{filename}"
-            output_path = os.path.join(tmpdir, out_filename)
-            processor.save(output_path)
-            processed_results.append((out_filename, output_path))
+                    out_filename = f"cortado_{filename}"
+                    output_path = os.path.join(tmpdir, out_filename)
+                    processor.save(output_path)
+                    processed_results.append((out_filename, output_path))
+                except Exception as ex:
+                    return jsonify({'error': f'Falha no arquivo "{filename}": {str(ex)}'}), 400
 
-        if len(processed_results) == 1:
-            out_filename, output_path = processed_results[0]
-            with open(output_path, 'rb') as f:
-                data = io.BytesIO(f.read())
-            return send_file(
-                data,
-                as_attachment=True,
-                download_name=out_filename,
-                mimetype='application/octet-stream'
-            )
-        else:
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                for out_filename, output_path in processed_results:
-                    zip_file.write(output_path, arcname=out_filename)
-            zip_buffer.seek(0)
-            return send_file(
-                zip_buffer,
-                as_attachment=True,
-                download_name='modelos_dentarios_cortados.zip',
-                mimetype='application/zip'
-            )
+            if not processed_results:
+                return jsonify({'error': 'Nenhum modelo 3D válido foi processado'}), 400
+
+            if len(processed_results) == 1:
+                out_filename, output_path = processed_results[0]
+                with open(output_path, 'rb') as f:
+                    data = io.BytesIO(f.read())
+                return send_file(
+                    data,
+                    as_attachment=True,
+                    download_name=out_filename,
+                    mimetype='application/octet-stream'
+                )
+            else:
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    for out_filename, output_path in processed_results:
+                        zip_file.write(output_path, arcname=out_filename)
+                zip_buffer.seek(0)
+                return send_file(
+                    zip_buffer,
+                    as_attachment=True,
+                    download_name='modelos_dentarios_cortados.zip',
+                    mimetype='application/zip'
+                )
+    except Exception as e:
+        return jsonify({'error': f'Erro de processamento: {str(e)}'}), 500
 
 
 def start_gui(port=5000, open_browser=True):
