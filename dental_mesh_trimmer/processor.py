@@ -18,7 +18,6 @@ class DentalMeshProcessor:
         Initialize processor with a trimesh object or Scene.
         """
         if isinstance(mesh, trimesh.Scene):
-            # If a scene was loaded (common with PLY/OBJ files containing color/materials)
             meshes = [g for g in mesh.geometry.values() if isinstance(g, trimesh.Trimesh)]
             if meshes:
                 mesh = trimesh.util.concatenate(meshes)
@@ -36,7 +35,6 @@ class DentalMeshProcessor:
             raise FileNotFoundError(f"Arquivo não encontrado: {filepath}")
 
         try:
-            # Force loading as mesh even if loaded as Scene
             loaded = trimesh.load(filepath, force='mesh')
         except Exception:
             try:
@@ -72,7 +70,8 @@ class DentalMeshProcessor:
 
     def trim_by_plane(self, plane_origin: np.ndarray = None, plane_normal: np.ndarray = None, height_percentile: float = 20.0) -> trimesh.Trimesh:
         """
-        Trims soft tissue / excess gingiva below (or behind) a specified cutting plane.
+        Trims soft tissue / excess gingiva below a specified cutting plane.
+        Features ultra-robust fallback using pure vertex/face filtering if slice_mesh_plane encounters non-manifold geometry.
         """
         if len(self.mesh.vertices) == 0:
             return self.mesh
@@ -94,6 +93,7 @@ class DentalMeshProcessor:
         else:
             plane_origin = np.array(plane_origin, dtype=float)
 
+        # Primary attempt: trimesh.intersections.slice_mesh_plane
         try:
             sliced = trimesh.intersections.slice_mesh_plane(
                 mesh=self.mesh,
@@ -103,8 +103,22 @@ class DentalMeshProcessor:
             )
             if len(sliced.vertices) > 0:
                 self.mesh = sliced
+                return self.mesh
         except Exception:
-            # Fallback for complex non-manifold geometry: filter vertices directly if slice fails
+            pass
+
+        # Robust Fallback: Filter faces whose centroids lie above/in front of the cut plane
+        try:
+            face_centroids = self.mesh.triangles.mean(axis=1)
+            # Dot product with plane_normal relative to plane_origin
+            dots = np.dot(face_centroids - plane_origin, plane_normal)
+            valid_face_mask = dots >= 0
+
+            if np.any(valid_face_mask):
+                submesh = self.mesh.submesh([valid_face_mask], append=True)
+                if len(submesh.vertices) > 0:
+                    self.mesh = submesh
+        except Exception:
             pass
 
         return self.mesh
@@ -150,4 +164,9 @@ class DentalMeshProcessor:
     def save(self, output_filepath: str):
         """Save processed mesh to STL/OBJ/PLY file."""
         os.makedirs(os.path.dirname(os.path.abspath(output_filepath)), exist_ok=True)
-        self.mesh.export(output_filepath)
+        # Determine file format from extension
+        ext = os.path.splitext(output_filepath)[1].lower().replace('.', '')
+        if ext in ['stl', 'ply', 'obj']:
+            self.mesh.export(output_filepath, file_type=ext)
+        else:
+            self.mesh.export(output_filepath)
