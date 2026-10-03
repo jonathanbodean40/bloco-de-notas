@@ -9,7 +9,7 @@ import numpy as np
 
 class DentalMeshProcessor:
     """
-    Handles cleaning, trimming, and base creation for 3D intraoral dental scan models.
+    Handles cleaning, trimming, auto-alignment, and base creation for 3D intraoral dental scan models.
     Preserves exact tooth dimensions and anatomical geometry.
     """
 
@@ -43,6 +43,44 @@ class DentalMeshProcessor:
                 raise ValueError(f"Não foi possível ler o arquivo 3D ({os.path.basename(filepath)}): {str(e)}")
 
         return cls(loaded)
+
+    def align_to_occlusal_plane(self) -> trimesh.Trimesh:
+        """
+        Aligns the dental mesh using Principal Component Analysis (PCA)
+        so that the main arch plane lies on XY and height variation is along Z.
+        """
+        if len(self.mesh.vertices) < 3:
+            return self.mesh
+
+        try:
+            vertices = self.mesh.vertices
+            centroid = vertices.mean(axis=0)
+            centered = vertices - centroid
+
+            # PCA via SVD / Covariance
+            cov = np.cov(centered.T)
+            eigenvalues, eigenvectors = np.linalg.eigh(cov)
+
+            # Sort components by variance (ascending: smallest variance is depth/height normal)
+            order = np.argsort(eigenvalues)
+            eigenvectors = eigenvectors[:, order]
+
+            # Construct rotation matrix so 3rd principal component (smallest variance) aligns with Z
+            rot_matrix = np.eye(4)
+            rot_matrix[:3, :3] = eigenvectors.T
+
+            self.mesh.apply_transform(rot_matrix)
+
+            # Ensure teeth point upwards (+Z) if necessary by examining bounding box
+            z_vals = self.mesh.vertices[:, 2]
+            if np.median(z_vals) > np.mean(z_vals):
+                flip_z = np.eye(4)
+                flip_z[2, 2] = -1.0
+                self.mesh.apply_transform(flip_z)
+        except Exception:
+            pass
+
+        return self.mesh
 
     def remove_floating_artifacts(self, min_relative_area: float = 0.05) -> trimesh.Trimesh:
         """
@@ -142,20 +180,27 @@ class DentalMeshProcessor:
         cut_height_percentile: float = 20.0,
         plane_origin: list = None,
         plane_normal: list = None,
-        create_base: bool = True
+        create_base: bool = True,
+        auto_align: bool = False
     ) -> trimesh.Trimesh:
         """
         Executes complete automated workflow:
-        1. Clean floating artifacts/debris
-        2. Plane cut soft tissue
-        3. Cap base (if enabled)
+        1. Auto-align scan orientation to principal occlusal axes (optional)
+        2. Clean floating artifacts/debris
+        3. Plane cut soft tissue
+        4. Cap base (if enabled)
         """
+        if auto_align and plane_origin is None and plane_normal is None:
+            self.align_to_occlusal_plane()
+
         self.remove_floating_artifacts(min_relative_area=min_artifact_ratio)
+
         self.trim_by_plane(
             plane_origin=plane_origin,
             plane_normal=plane_normal,
             height_percentile=cut_height_percentile
         )
+
         if create_base:
             self.add_flat_base()
 
@@ -164,7 +209,6 @@ class DentalMeshProcessor:
     def save(self, output_filepath: str):
         """Save processed mesh to STL/OBJ/PLY file."""
         os.makedirs(os.path.dirname(os.path.abspath(output_filepath)), exist_ok=True)
-        # Determine file format from extension
         ext = os.path.splitext(output_filepath)[1].lower().replace('.', '')
         if ext in ['stl', 'ply', 'obj']:
             self.mesh.export(output_filepath, file_type=ext)

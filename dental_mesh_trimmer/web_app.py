@@ -223,6 +223,10 @@ HTML_TEMPLATE = """
 
             <div class="settings-panel">
                 <div class="setting-item">
+                    <label for="auto-align">Alinhamento Automático do Plano Oclusal (PCA):</label>
+                    <input type="checkbox" id="auto-align" name="auto_align" checked style="width:20px; height:20px;">
+                </div>
+                <div class="setting-item">
                     <label for="cut-percentile">Altura do Corte da Gengiva:</label>
                     <div>
                         <input type="range" id="cut-percentile" name="cut_percentile" min="5" max="40" value="20" oninput="document.getElementById('cut-val').innerText = this.value + '%'">
@@ -322,6 +326,7 @@ HTML_TEMPLATE = """
             });
             formData.append('cut_percentile', document.getElementById('cut-percentile').value);
             formData.append('create_base', document.getElementById('create-base').checked);
+            formData.append('auto_align', document.getElementById('auto-align').checked);
 
             try {
                 const response = await fetch('/process', {
@@ -379,6 +384,7 @@ def process_files():
     uploaded_files = request.files.getlist('files')
     cut_percentile = float(request.form.get('cut_percentile', 20.0))
     create_base = request.form.get('create_base') == 'true'
+    auto_align = request.form.get('auto_align') == 'true'
 
     if not uploaded_files:
         return jsonify({'error': 'Nenhum arquivo foi enviado'}), 400
@@ -399,7 +405,8 @@ def process_files():
                     processor.process(
                         min_artifact_ratio=0.05,
                         cut_height_percentile=cut_percentile,
-                        create_base=create_base
+                        create_base=create_base,
+                        auto_align=auto_align
                     )
 
                     out_filename = f"cortado_{filename}"

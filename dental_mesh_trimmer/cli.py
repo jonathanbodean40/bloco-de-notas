@@ -13,14 +13,16 @@ def process_single_file(
     output_file: str,
     cut_percentile: float,
     min_artifact_ratio: float,
-    create_base: bool
+    create_base: bool,
+    auto_align: bool
 ):
     print(f"Processing: {input_file} -> {output_file}")
     processor = DentalMeshProcessor.from_file(input_file)
     processor.process(
         min_artifact_ratio=min_artifact_ratio,
         cut_height_percentile=cut_percentile,
-        create_base=create_base
+        create_base=create_base,
+        auto_align=auto_align
     )
     processor.save(output_file)
     print(f"Successfully saved: {output_file}")
@@ -50,6 +52,10 @@ def main():
         "--no-base", action="store_true",
         help="Disable automatic flat base capping."
     )
+    parser.add_argument(
+        "--no-auto-align", action="store_true",
+        help="Disable automatic PCA alignment to occlusal plane."
+    )
 
     args = parser.parse_args()
 
@@ -77,7 +83,8 @@ def main():
                     out_filepath,
                     args.cut_percentile,
                     args.min_artifact_ratio,
-                    create_base=not args.no_base
+                    create_base=not args.no_base,
+                    auto_align=not args.no_auto_align
                 )
             except Exception as e:
                 print(f"Error processing {filename}: {e}")
@@ -93,7 +100,8 @@ def main():
             output_file,
             args.cut_percentile,
             args.min_artifact_ratio,
-            create_base=not args.no_base
+            create_base=not args.no_base,
+            auto_align=not args.no_auto_align
         )
 
 
