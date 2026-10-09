@@ -10,16 +10,12 @@
 <body>
   <header id="app-header">
     <div class="brand">Notas Exclusivas Pro</div>
-    <nav aria-label="Ações das notas">
-      <button id="account-btn">Conta</button>
-      <button id="sync-icon-btn" aria-label="Sincronizar" title="Sincronizar">⟳</button>
-      <button id="toggle-sidebar-btn">Notas</button>
-      <button id="new-note-btn">＋ Nova nota</button>
-
-      <button id="reminders-btn">Lembretes</button>
-    </nav>
-    <span id="save-status" role="status" aria-live="polite"></span>
   </header>
+  <footer id="app-footer" aria-label="Conta e sincronização">
+    <button id="account-btn">Conta</button>
+    <button id="sync-icon-btn" aria-label="Sincronizar" title="Sincronizar">⟳</button>
+    <span id="save-status" role="status" aria-live="polite"></span>
+  </footer>
   <dialog id="auth-dialog"><form id="auth-form" method="dialog">
     <div class="dialog-heading"><h2>Sincronização</h2><button id="close-auth-btn" class="plain-btn" type="button" aria-label="Fechar">✕</button></div>
     <p id="auth-description">Entre com a mesma conta no PC e no telemóvel.</p>
@@ -35,13 +31,15 @@
     <button id="trash-btn">Notas excluídas</button>
     <div id="sidebar-notes-list"></div>
   </aside><div id="sidebar-backdrop" class="backdrop" hidden></div>
+  <button id="new-note-btn" aria-label="Nova nota" title="Nova nota">＋</button>
 
 
   <main id="workspace" aria-label="Área de trabalho das notas">
-    <div id="empty-workspace" hidden><p>Nota fechada</p><span>O conteúdo guardado continua na lista de notas.</span><button id="empty-new-btn">＋ Nova nota</button></div>
+    <div id="empty-workspace" hidden><p>Nota fechada</p><span>O conteúdo guardado continua na lista de notas.</span></div>
   </main>
   <div id="popup-message" role="status" hidden>O navegador bloqueou a janela. Permita pop-ups para este endereço e tente novamente. <a id="popup-fallback" target="_blank" rel="noopener">Abrir a nota num separador</a><button id="dismiss-popup" aria-label="Fechar aviso">✕</button></div>
   <div id="custom-context-menu" class="context-menu" aria-label="Opções da nota" hidden>
+    <div class="options-heading">Opções da nota</div>
     <div class="quick-actions">
       <button data-action="undo">↶ Desfazer</button><button data-action="redo">↷ Refazer</button>
     </div>
@@ -90,25 +88,8 @@
     <p id="shipment-remaining" class="record-progress" role="status"></p><p id="shipment-error" role="alert"></p>
     <div class="dialog-actions"><button type="submit">Guardar caso</button></div>
   </form></dialog>
-  <dialog id="reminders-dialog" class="manager-dialog">
-    <div class="dialog-heading"><h2>Lembretes</h2><button type="button" data-close="reminders-dialog" aria-label="Fechar lembretes">✕</button></div>
-    <p id="push-status" role="status"></p>
-    <p class="subtle">Os avisos no ecrã bloqueado dizem apenas que existe um lembrete. Abra a aplicação para consultar os detalhes. O som depende das definições de notificações do dispositivo.</p>
-    <button id="new-reminder">＋ Novo lembrete</button>
-    <div id="reminder-list" class="records-list"></div>
-  </dialog>
-  <dialog id="reminder-dialog" class="manager-dialog"><form id="reminder-form">
-    <div class="dialog-heading"><h2>Agendar lembrete</h2><button type="button" data-close="reminder-dialog" aria-label="Fechar agendamento">✕</button></div>
-    <label>O que pretende lembrar?<input id="reminder-label" maxlength="250" required placeholder="Ligar amanhã às 14h"></label>
-    <label>Data e hora<input id="reminder-due" type="datetime-local" required></label>
-    <p id="reminder-zone" class="subtle"></p><p id="reminder-error" role="alert"></p>
-    <div class="dialog-actions"><button type="submit">Agendar</button></div>
-  </form></dialog>
   <dialog id="trash-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Notas excluídas</h2><button data-close="trash-dialog" aria-label="Fechar notas excluídas">✕</button></div><p>Restaurar recupera a última versão guardada.</p><div id="trash-list" class="records-list"></div></dialog>
-  <dialog id="folders-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Pastas dentro da nota</h2><button data-close="folders-dialog" aria-label="Fechar pastas">✕</button></div><p id="folders-note"></p><form id="folder-form"><label>Nome da nova pasta<input id="folder-name" maxlength="120" required></label><button type="submit">Criar pasta</button></form><p id="folders-status" role="status"></p><div id="folder-list" class="records-list"></div><div class="dialog-actions"><button id="save-folders">Guardar nota</button></div></dialog>
-  <dialog id="folder-notes-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Adicionar nota à pasta</h2><button data-close="folder-notes-dialog" aria-label="Fechar seleção de notas">✕</button></div><p>A nota escolhida abrirá para revisão. Clique em Guardar nessa nota para confirmar a pasta.</p><div id="folder-note-choices" class="records-list"></div></dialog>
-  <dialog id="crop-dialog"><div class="dialog-heading"><h2>Recortar imagem</h2><button id="cancel-crop" aria-label="Cancelar recorte">✕</button></div><p>Arraste os cantos para escolher a área visível. A imagem original será preservada.</p><div id="crop-stage"><img id="crop-source" alt="Imagem original para recorte"><div id="crop-selection"><span data-crop-corner="nw"></span><span data-crop-corner="ne"></span><span data-crop-corner="sw"></span><span data-crop-corner="se"></span></div></div><div class="crop-fields"><label>Esquerda %<input id="crop-x" type="number" min="0" max="98" step="1"></label><label>Topo %<input id="crop-y" type="number" min="0" max="98" step="1"></label><label>Largura %<input id="crop-w" type="number" min="2" max="100" step="1"></label><label>Altura %<input id="crop-h" type="number" min="2" max="100" step="1"></label></div><div class="dialog-actions"><button id="reset-crop">Imagem inteira</button><button id="apply-crop">Aplicar recorte</button></div></dialog>
   <dialog id="link-dialog"><form id="link-form"><div class="dialog-heading"><h2>Adicionar ligação</h2><button id="cancel-link" type="button" aria-label="Cancelar ligação">✕</button></div><label>Endereço completo<input id="link-url" type="text" required placeholder="https://…"></label><label>Texto a mostrar (opcional)<input id="link-label" type="text" placeholder="Abrir página ou plano de tratamento"></label><p id="link-error" role="status"></p><div class="dialog-actions"><button type="submit">Adicionar ligação</button></div></form></dialog>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="app.js"></script>
+  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="app.js"></script>
 </body></html>
 

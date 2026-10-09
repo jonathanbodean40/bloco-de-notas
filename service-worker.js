@@ -1,5 +1,5 @@
-const CACHE='notas-pro-v30-rich-copy-trash-selection';
-const FILES=['./','./index.html','./style.css','./app.js','./spell-worker.js','./config.js','./manifest.webmanifest','./icon.svg'];
+const CACHE='notas-pro-v31-simple-note-layout';
+const FILES=['./','./index.html','./style.css','./app.js','./vendor/supabase-js-v2.js','./spell-worker.js','./config.js','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('notas-pro-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
@@ -11,21 +11,6 @@ self.addEventListener('fetch',event=>{
   event.respondWith(fetch(event.request).then(response=>{
     if(response.ok){const copy=response.clone();event.waitUntil(caches.open(CACHE).then(c=>c.put(cacheKey,copy)));}return response;
   }).catch(async()=>await caches.match(cacheKey)||Response.error()));
-});
-self.addEventListener('push',event=>{
-  let payload={};try{payload=event.data?.json()||{};}catch{}
-  const id=/^[0-9a-f-]{36}$/i.test(payload.id||'')?payload.id:'';
-  event.waitUntil(self.registration.showNotification('Notas Exclusivas Pro',{
-    body:'Tem um lembrete. Toque para consultar.',
-    tag:`notas-reminder-${id}-${payload.revision||''}`,
-    icon:new URL('./icon.svg',self.location).href,
-    data:{id},requireInteraction:true
-  }));
-});
-self.addEventListener('notificationclick',event=>{
-  event.notification.close();const url=new URL('./',self.location);url.searchParams.set('reminder',event.notification.data?.id||'1');
-  // A new main app view avoids replacing unsaved text in an existing editor.
-  event.waitUntil(self.clients.openWindow(url.href));
 });
 
 
