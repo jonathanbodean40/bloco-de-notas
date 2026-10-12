@@ -1,5 +1,7 @@
 (() => {
   'use strict';
+  const privateAccess = window.NOTAS_PRIVATE;
+  if (!privateAccess?.authorized || !privateAccess.session?.user) return;
   const GUEST_KEY = 'notas-exclusivas-pro-v2';
   const FAVORITES_KEY = `${GUEST_KEY}:favorite-colors`;
   const $ = selector => document.querySelector(selector);
@@ -7,7 +9,6 @@
   const windows = new Map();
   const backgrounds = {Azul:'#eaf4fc',Amarelo:'#fff9dc',Laranja:'#fff0e2',Verde:'#edf7e9',Branco:'#ffffff',Rosa:'#fceef3',Lilás:'#f2ecfa'};
   const symbols = ['←','→','↑','↓','↔','↕','↗','↘','✓','✗','★','●','■','▲','◆','♥','+','−'];
-  const config = window.NOTAS_CONFIG || {};
   const route = new URL(location.href);
   const detachedId = route.searchParams.get('note');
   const detachedScope = route.searchParams.get('scope') || 'guest';
@@ -15,13 +16,11 @@
   const detached = !!detachedId;
   const mobileNotes = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints>1 && matchMedia('(max-width:1100px)').matches);
   document.body.classList.toggle('detached',detached);document.body.classList.toggle('mobile-notes',mobileNotes);
-  if(config.preview){document.body.classList.add('preview');const badge=document.createElement('span');badge.className='preview-badge';badge.textContent='Pré-visualização local · notas de teste';$('#app-header .brand').append(badge);}
-  const configured = /^https:\/\/.+\.supabase\.co$/.test(config.supabaseUrl || '') && /^(sb_publishable_|eyJ)/.test(config.supabasePublishableKey || '');
-  const cloud = configured && window.supabase ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey) : null;
-  let user = null, active = null, savedRange = null, zIndex = 1, titleHtmlSupported = true, applyingEdit = false;
+  const cloud = privateAccess.client;
+  let user = privateAccess.session.user, active = null, savedRange = null, zIndex = 1, titleHtmlSupported = true, applyingEdit = false;
   let syncTimer, syncFlight = null, syncAgain = false, sessionEpoch = 0, pendingTitle = null, imageTarget = null, localSaveFailed = false;
   let noteDrag = null, noteRename = null;
-  let notes = loadNotes(GUEST_KEY);
+  let notes = loadNotes(storageKey());
   let favorites = readJSON(FAVORITES_KEY, {text:[],highlight:[]});
   if (!favorites || !Array.isArray(favorites.text) || !Array.isArray(favorites.highlight)) favorites = {text:[],highlight:[]};
   function readJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } }
@@ -31,7 +30,7 @@
     try{for(const k of Object.keys(localStorage)){if(k.startsWith(`${key}:entry:`)){const n=readJSON(k,null);if(n&&typeof n.id==='string')all.push(n);}}}catch{}
     return [...latestById(all).values()];
   }
-  function storageKey() { return user ? `${GUEST_KEY}:${user.id}` : GUEST_KEY; }
+  function storageKey() { return `${GUEST_KEY}:${user.id}`; }
   function persist() {
     try {
       notes=[...latestById([...loadNotes(storageKey()),...notes]).values()];
@@ -177,7 +176,7 @@
       const renameSnapshot=value=>{const data=JSON.parse(value);data.title=title;return JSON.stringify(data);};
       w.title=title;w.savedSnapshot=renameSnapshot(w.savedSnapshot);w.history=w.history.map(renameSnapshot);
       w.el.setAttribute('aria-label',title||'Nota sem título');
-      if(detached)document.title=`${title||'Sem título'} — Notas Exclusivas Pro`;
+      if(detached&&privateAccess.authorized)document.title=`${title||'Sem título'} — Notas Exclusivas Pro`;
     }
     // A title-only update must not save or replace text still being edited.
     w.savedAt=note.updatedAt;w.savedNote={...note};return true;
@@ -214,7 +213,7 @@
     w.paper.style.setProperty('--paper',w.bg);w.el.style.background=w.bg;
     w.editor.style.width=`calc((100% - 40px) * ${w.textWidth / 100})`;
     w.el.setAttribute('aria-label',w.title || 'Nota sem título');
-    renderOnyx(w);document.title=detached?`${w.title||'Sem título'} — Notas Exclusivas Pro`:'Notas Exclusivas Pro';renderObjects(w);fitPaper(w);
+    renderOnyx(w);document.title=detached&&privateAccess.authorized?`${w.title||'Sem título'} — Notas Exclusivas Pro`:'Notas Exclusivas Pro';renderObjects(w);fitPaper(w);
   }
   function fitPaper(w) {const scroll=w.el.querySelector('.note-scroll');w.paper.style.width=`${scroll.clientWidth}px`;fitTextBoxes(w);const bounds=w.objects.map(objectBounds);w.paper.style.minWidth=`${Math.max(0,...bounds.map(o=>o.right+25))}px`;w.paper.style.height=`${Math.max(scroll.clientHeight,w.editor.scrollHeight+44,(w.paper.querySelector('.onyx-board')?.scrollHeight||0)+35,...bounds.map(o=>o.bottom+35))}px`;}
   function noteActionIcon(action){
@@ -229,14 +228,14 @@
     const initial = data.rect || {x:14+(n%3)*36,y:14+(n%3)*32,w:width,h:height};
     const rect={w:clamp(initial.w,280,Math.max(280,workspace.clientWidth-16)),h:clamp(initial.h,240,Math.max(240,workspace.clientHeight-16)),x:0,y:0};
     rect.x=clamp(initial.x,0,workspace.clientWidth-rect.w);rect.y=clamp(initial.y,0,workspace.clientHeight-40);
-    const el=document.createElement('section');el.className='note-window';el.innerHTML=`<div class="window-bar"><button data-window="save" aria-label="Guardar nota" title="Guardar nota">${noteActionIcon('save')}</button><button data-window="share" aria-label="Compartilhar nota" title="Compartilhar nota">${noteActionIcon('share')}</button><button data-window="menu" aria-label="Opções de formatação" title="Opções de formatação" aria-expanded="false">${noteActionIcon('menu')}</button><button data-window="close" aria-label="Fechar nota" title="Fechar nota sem eliminar">${noteActionIcon('close')}</button></div><div class="note-scroll"><div class="note-paper"><div class="note-editor" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui…" spellcheck="true"></div></div></div><div class="window-footer"><span>${note?'Guardado neste dispositivo':'Pronto para escrever'}</span><span>Gravação manual</span></div>`;
+    const el=document.createElement('section');el.className='note-window';el.innerHTML=`<div class="window-bar"><button data-window="save" aria-label="Guardar nota" title="Guardar nota">${noteActionIcon('save')}</button><button data-window="menu" aria-label="Opções de formatação" title="Opções de formatação" aria-expanded="false">${noteActionIcon('menu')}</button><button data-window="close" aria-label="Fechar nota" title="Fechar nota sem eliminar">${noteActionIcon('close')}</button></div><div class="note-scroll"><div class="note-paper"><div class="note-editor" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui…" spellcheck="true"></div></div></div><div class="window-footer"><span>${note?'Guardado neste dispositivo':'Pronto para escrever'}</span><span>Gravação manual</span></div>`;
     const w={id:note?.id||makeId(),title:note?.title === 'Sem título' ? '' : note?.title || '',el,editor:el.querySelector('.note-editor'),paper:el.querySelector('.note-paper'),footer:el.querySelector('.window-footer span'),...data,rect,selected:null,history:[],historyIndex:0};
     if(!note?.content&&route.searchParams.get('kind')==='onyx'){w.kind='onyx';w.onyxRows=decodeOnyx([{}, {}, {}, {}]);}w.editor.innerHTML=data.html;windows.set(w.id,w);workspace.append(el);geometry(w);linkify(w,false);display(w);w.history=[snapshot(w)];w.savedSnapshot=snapshot(w);w.savedAt=note?.updatedAt;w.savedNote=note?{...note}:null;w.dirty=false;
     const destination=validLocation({noteId:route.searchParams.get('parent'),folderId:route.searchParams.get('folder')});if(destination){w.location=destination;commit(w);}
     el.addEventListener('pointerdown',()=>activate(w));
     w.zoom=1;
     el.querySelectorAll('[data-window]').forEach(button=>button.addEventListener('click',()=>{
-      activate(w);const action=button.dataset.window;if(action==='share')openShare(w);
+      activate(w);const action=button.dataset.window;
       if(action==='close')closeNote(w);if(action==='save')saveNote(w);
       if(action==='menu'){if(!menu.hidden){closeMenu();return;}const r=button.getBoundingClientRect();openMenu(w,r.left,r.bottom+3);}
     }));
@@ -245,6 +244,32 @@
     activate(w);$('#empty-workspace').hidden=true;saveWorkspace();renderNotes();if(focus)w.editor.focus();return w;
   }
   function saveWorkspace() { if(!detached&&active)try {localStorage.setItem(`${storageKey()}:primary`,active.id);}catch{} }
+  function privateDraftKey(){return `${storageKey()}:private-drafts:${detachedId||'home'}`;}
+  function preservePrivateDrafts(){
+    try{
+      const drafts=[...windows.values()].filter(w=>w.dirty).map(w=>{captureTextBoxes(w);return {id:w.id,title:w.title,content:encode(w),savedAt:w.savedAt||null};});
+      if(drafts.length)sessionStorage.setItem(privateDraftKey(),JSON.stringify(drafts));else sessionStorage.removeItem(privateDraftKey());
+      return true;
+    }catch{return false;}
+  }
+  function restorePrivateDrafts(){
+    let drafts;try{drafts=JSON.parse(sessionStorage.getItem(privateDraftKey())||'[]');}catch{return;}
+    if(!Array.isArray(drafts))return;
+    let restored=false;
+    for(const draft of drafts){
+      if(!draft||typeof draft.id!=='string'||typeof draft.content!=='string')continue;
+      const stored=notes.find(n=>n.id===draft.id);
+      if(stored&&!stored.deletedAt&&stored.content===draft.content&&(stored.title||'')===(draft.title||''))continue;
+      const existing=windows.get(draft.id);if(existing?.dirty)continue;if(existing)removeWindow(existing);
+      const w=createWindow({id:draft.id,title:String(draft.title||''),content:draft.content},false);
+      const savedData=decode(stored?.content||'');
+      w.savedAt=draft.savedAt;w.savedNote=stored?.updatedAt===draft.savedAt?{...stored}:null;
+      w.savedSnapshot=snapshot({...w,...savedData,title:stored?.title||'',editor:{innerHTML:savedData.html}});w.dirty=true;
+      w.footer.textContent='Rascunho recuperado · clique em Guardar';restored=true;
+    }
+    if(restored){closeSidebar();status.textContent='Alterações por guardar recuperadas neste dispositivo. Clique em Guardar para sincronizar.';}
+    preservePrivateDrafts();
+  }
   function removeWindow(w) {w.el.remove();windows.delete(w.id);if(active===w){active=null;savedRange=null;closeMenu();}$('#empty-workspace').hidden=false;renderNotes();if(!detached&&!windows.size)openSidebar();}
   function restoreWorkspace() {
     if(detached){
@@ -679,13 +704,14 @@
     if(result.error&&missingTitle(result.error)){titleHtmlSupported=false;result=await cloud.from('notes').select('id,title,content,updated_at,deleted_at').eq('user_id',account.id).order('updated_at',{ascending:false});}return result;
   }
   function latestById(items){return items.reduce((map,n)=>{if(!map.has(n.id)||(!isPurged(map.get(n.id))&&(isPurged(n)||Date.parse(n.updatedAt)>Date.parse(map.get(n.id).updatedAt))))map.set(n.id,n);return map;},new Map());}
-  function scheduleSync(){if(!cloud||!user)return;clearTimeout(syncTimer);syncTimer=setTimeout(syncNotes,1200);}
+  function scheduleSync(){if(!cloud||!user||!privateAccess.authorized)return;clearTimeout(syncTimer);syncTimer=setTimeout(syncNotes,1200);}
   async function syncNotes(){
-    if(!cloud||!user)return;
+    if(!cloud||!user||!privateAccess.authorized)return;
     if(syncFlight){syncAgain=true;return syncFlight;}
     const epoch=sessionEpoch,account=user;
     syncFlight=(async()=>{
       try{
+        if(!await privateAccess.validate()||epoch!==sessionEpoch)return;
         status.textContent='A sincronizar…';
         const result=await fetchRemote(account);if(epoch!==sessionEpoch)return;if(result.error)throw result.error;
         const remote=(result.data||[]).map(n=>({id:n.id,title:n.title==='Sem título'?'':n.title,titleHtml:n.title_html||'',content:n.content,updatedAt:n.updated_at,deletedAt:n.deleted_at||null}));
@@ -717,20 +743,21 @@
     try{await syncFlight;}finally{syncFlight=null;if(syncAgain){syncAgain=false;scheduleSync();}}
   }
   function setAuthView(){
-    if(config.preview){$('#signed-out-actions').hidden=true;$('#signed-in-actions').hidden=true;$('#auth-email').closest('label').hidden=true;$('#auth-password').closest('label').hidden=true;$('#auth-description').textContent='Esta pré-visualização guarda apenas notas de teste neste navegador.';$('#auth-message').textContent='A ligação à sua conta fica reservada à versão publicada.';return;}
-    $('#signed-out-actions').hidden=!!user;$('#signed-in-actions').hidden=!user;$('#auth-email').closest('label').hidden=!!user;$('#auth-password').closest('label').hidden=!!user;
-    $('#account-btn').classList.toggle('synced',!!user);$('#auth-message').textContent=user?`Sessão iniciada como ${user.email}`:cloud?'':'Configure o ficheiro config.js e verifique a ligação para sincronizar.';
+    $('#account-btn').classList.toggle('synced',privateAccess.authorized);$('#auth-message').textContent=`Sessão iniciada como ${user.email}`;
   }
   function setSession(session){
+    if(!privateAccess.authorized||!session?.user)return;
     trashSelection.clear();
-    const next=session?.user||null;if(next?.id===user?.id){user=next;setAuthView();return;}
+    const next=session.user;if(next.id===user.id){user=next;setAuthView();return;}
     noteDrag?.cancel();noteRename?.cancel();
     saveWorkspace();sessionEpoch++;clearTimeout(syncTimer);windows.forEach(w=>w.el.remove());windows.clear();active=null;savedRange=null;closeMenu();
     document.querySelectorAll('dialog[open]').forEach(d=>d.close());pendingTitle=null;user=next;notes=loadNotes(storageKey());$('#empty-workspace').hidden=false;setAuthView();restoreWorkspace();renderNotes();if(user)syncNotes();
   }
-  $('#auth-form').addEventListener('submit',async e=>{e.preventDefault();if(!cloud)return setAuthView();try{const {error}=await cloud.auth.signInWithPassword({email:$('#auth-email').value.trim(),password:$('#auth-password').value});$('#auth-message').textContent=error?error.message:'Sessão iniciada.';$('#auth-password').value='';}catch{$('#auth-message').textContent='Não foi possível entrar. Verifique a ligação.';}});
-  $('#signup-btn').addEventListener('click',async()=>{if(!cloud||!$('#auth-form').reportValidity())return;try{const {error}=await cloud.auth.signUp({email:$('#auth-email').value.trim(),password:$('#auth-password').value,options:{emailRedirectTo:location.origin+location.pathname}});$('#auth-message').textContent=error?error.message:'Conta criada. Confirme o e-mail recebido e depois entre.';}catch{$('#auth-message').textContent='Não foi possível criar a conta. Verifique a ligação.';}});
-  $('#logout-btn').addEventListener('click',async()=>{if(!cloud)return;if([...windows.values()].some(w=>w.dirty)&&!confirm('Terminar sessão e descartar as alterações por guardar?'))return;try{const {error}=await cloud.auth.signOut();if(error){$('#auth-message').textContent=error.message;return;}setSession(null);$('#auth-dialog').close();}catch{$('#auth-message').textContent='Não foi possível terminar a sessão.';}});
+  $('#logout-btn').addEventListener('click',()=>void privateAccess.signOut());
+  $('#manage-devices-btn').addEventListener('click',()=>privateAccess.manageDevices());
+  addEventListener('notas:private-before-reload',e=>{if(!preservePrivateDrafts())e.preventDefault();});
+  addEventListener('notas:private-locked',()=>{sessionEpoch++;clearTimeout(syncTimer);syncAgain=false;noteDrag?.cancel();noteRename?.cancel();preservePrivateDrafts();saveWorkspace();});
+  addEventListener('notas:private-authorized',e=>{setSession(e.detail.session);scheduleSync();});
   $('#account-btn').addEventListener('click',()=>{setAuthView();$('#auth-dialog').showModal();});$('#close-auth-btn').addEventListener('click',()=>$('#auth-dialog').close());$('#sync-btn').addEventListener('click',syncNotes);$('#sync-icon-btn').addEventListener('click',syncNotes);
   $('#close-sidebar-btn').addEventListener('click',()=>closeSidebar(true));$('#sidebar-backdrop').addEventListener('click',()=>closeSidebar());
   $('#new-onyx-btn')?.addEventListener('click',()=>openDetached(makeId(),null,true,'onyx'));
@@ -746,13 +773,14 @@
     }
   },true);
   document.addEventListener('keydown',e=>{
+    if(!privateAccess.authorized)return;
     if(e.key==='Escape'){closeMenu();closeSidebar(true);}
     if(e.target.closest('dialog,input,textarea'))return;
     const key=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&key==='s'){e.preventDefault();saveNote(active);}
     if((e.ctrlKey||e.metaKey)&&(key==='z'||key==='y')){e.preventDefault();undo(active,key==='y'||e.shiftKey?1:-1);}
   });
   addEventListener('pagehide',saveWorkspace);
-  addEventListener('beforeunload',e=>{if(localSaveFailed||[...windows.values()].some(w=>w.dirty)){e.preventDefault();e.returnValue='';}});
+  addEventListener('beforeunload',e=>{if(!privateAccess.reloading&&(localSaveFailed||[...windows.values()].some(w=>w.dirty))){e.preventDefault();e.returnValue='';}});
   let storageTimer;
   addEventListener('storage',e=>{
     if(e.key===homeOrderKey()){renderNotes();return;}
@@ -826,42 +854,7 @@
   function restoreNote(id){notes=[...latestById([...loadNotes(storageKey()),...notes]).values()];const n=notes.find(n=>n.id===id&&n.deletedAt&&!isPurged(n));if(!n)return;notes[notes.indexOf(n)]={...n,deletedAt:null,updatedAt:timestamp(n.updatedAt)};if(!persist())return;scheduleSync();renderTrash();renderNotes();status.textContent='Nota restaurada. Abra-a em Notas.';}
   $('#trash-btn').addEventListener('click',()=>{trashSelection.clear();renderTrash();$('#trash-dialog').showModal();});
 
-  let sharePayload=null,shareURL='';
-  async function shareService(action,values={}){
-    if(config.preview){
-      if(action==='share-create'){const token=makeId()+makeId();localStorage.setItem('preview-share:'+token,JSON.stringify(values.note));return {token};}
-      if(action==='share-open'){const note=readJSON('preview-share:'+values.token,null);if(!note)throw new Error('Esta partilha de teste só abre neste navegador.');return {note};}
-    }
-    if(!cloud)throw new Error('Serviço de partilha indisponível.');
-    const {data,error}=await cloud.functions.invoke('notes-reminders',{body:{action,...values}});
-    if(error||data?.error)throw new Error(data?.error||'Não foi possível abrir ou criar a partilha. Verifique a ligação e a publicação do serviço.');return data;
-  }
-  function openShare(w){
-    captureTextBoxes(w);sharePayload={title:w.title||'Sem título',content:encode({...w,folders:[],location:null})};shareURL='';
-    $('#share-link').value='';$('#share-result').hidden=true;$('#share-message').textContent=config.preview?'Pré-visualização: o link de teste funciona apenas neste navegador.':'Cria uma cópia do conteúdo atual, incluindo imagens. Quem receber o link poderá abrir e guardar uma cópia. O link expira após 30 dias. Subnotas não são incluídas.';
-    $('#share-dialog').showModal();
-  }
-  $('#create-share').addEventListener('click',async()=>{
-    const control=$('#create-share');control.disabled=true;
-    try{if(!config.preview&&!user)throw new Error('Entre em Conta antes de criar uma partilha.');const result=await shareService('share-create',{note:sharePayload});const u=new URL(location.pathname,location.origin);u.hash='share='+result.token;shareURL=u.href;$('#share-link').value=shareURL;$('#share-result').hidden=false;$('#share-message').textContent='Cópia pronta. Envie o link ao colega; ele poderá escolher Guardar no meu bloco.';}catch(e){$('#share-message').textContent=e.message;}finally{control.disabled=false;}
-  });
-  $('#copy-share').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(shareURL);$('#share-message').textContent='Link copiado.';}catch{$('#share-link').select();$('#share-message').textContent='Selecione e copie o link apresentado.';}});
-  $('#whatsapp-share').addEventListener('click',()=>window.open('https://wa.me/?text='+encodeURIComponent(shareURL),'_blank','noopener,noreferrer'));
-  $('#email-share').addEventListener('click',()=>{location.href='mailto:?subject='+encodeURIComponent(sharePayload.title)+'&body='+encodeURIComponent('Abra a nota e escolha Guardar no meu bloco:\n'+shareURL);});
-  $('#system-share').addEventListener('click',async()=>{try{if(navigator.share)await navigator.share({title:sharePayload.title,url:shareURL});else $('#share-message').textContent='Use WhatsApp, E-mail ou Copiar link.';}catch(e){if(e.name!=='AbortError')$('#share-message').textContent='Não foi possível abrir a partilha do dispositivo.';}});
-  let incomingShare=null;
-  async function readSharedNote(){
-    const token=new URLSearchParams(location.hash.slice(1)).get('share');if(!token)return;
-    $('#receive-dialog').showModal();$('#receive-message').textContent='A abrir a nota…';$('#import-share').disabled=true;
-    try{const result=await shareService('share-open',{token});if(!result.note||typeof result.note.content!=='string')throw new Error('Nota inválida.');incomingShare=result.note;$('#receive-title').textContent=incomingShare.title;$('#receive-preview').textContent=plainText(decode(incomingShare.content).html).slice(0,1500);$('#receive-message').textContent='Guarde uma cópia independente. Entre primeiro em Conta se quiser sincronizá-la com os seus dispositivos.';$('#import-share').disabled=false;}catch(e){$('#receive-message').textContent=e.message;}
-  }
-  $('#import-share').addEventListener('click',()=>{
-    if(!incomingShare)return;const data=decode(incomingShare.content);data.folders=[];data.location=null;
-    const note={id:makeId(),title:String(incomingShare.title||'').slice(0,250),content:incomingShare.content};const w=createWindow(note,false);w.folders=[];w.location=null;w.savedAt=null;
-    if(saveNote(w)){$('#receive-dialog').close();history.replaceState(null,'',location.pathname+location.search);incomingShare=null;status.textContent='Cópia guardada no seu bloco.';}
-  });
-  addEventListener('hashchange',readSharedNote);
-  setTimeout(readSharedNote,500);
+  // Public sharing is disabled for this personal application.
 
   function updateFontSizeLabel(range,editor){
     const sizes=new Set();const add=node=>{const el=node.nodeType===3?node.parentElement:node;if(el)sizes.add(Math.round(parseFloat(getComputedStyle(el).fontSize)*10)/10);};
@@ -943,8 +936,9 @@
   // Pointer capture and re-rendering keep their target on this stable list.
   $('#sidebar-notes-list').addEventListener('contextmenu',e=>{if(!e.target.closest('input'))e.preventDefault();});
   $('#sidebar-notes-list').addEventListener('auxclick',e=>{if(e.button===2&&!e.target.closest('input'))e.preventDefault();});
-  setupMenu();setupLinks();setAuthView();restoreWorkspace();renderNotes();
-  if(cloud){cloud.auth.getSession().then(({data})=>setSession(data.session)).catch(()=>{status.textContent='Sem ligação à conta; notas disponíveis neste dispositivo.';});cloud.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>setSession(session),0);});}
-  if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').then(reg=>reg.update()).catch(()=>{}));
+  setupMenu();setupLinks();setAuthView();restoreWorkspace();renderNotes();restorePrivateDrafts();
+  window.dispatchEvent(new Event('notas:private-ready'));
+  scheduleSync();
 })();
+
 
