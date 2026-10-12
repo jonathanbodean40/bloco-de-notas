@@ -4,8 +4,9 @@
 -- o alojamento público do HTML nem eventuais Edge Functions de partilha.
 --
 -- PARÂMETRO VERIFICADO: UUID da conta do proprietário, corroborada no
--- painel Authentication > Users e na conta da aplicação publicada. A migração
--- ainda não foi executada. Não escolher proprietário pela ordem dos utilizadores.
+-- painel Authentication > Users e na conta da aplicação publicada.
+-- Estado da implantação e hash executado: consultar personal-access.md.
+-- Não escolher proprietário pela ordem dos utilizadores.
 -- O valor fica numa tabela privada; user_metadata não é usado para autorizar.
 --
 -- A transação aborta integralmente se o parâmetro ou o esquema forem inválidos.
