@@ -20,6 +20,7 @@
   const cloud = configured && window.supabase ? window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey) : null;
   let user = null, active = null, savedRange = null, zIndex = 1, titleHtmlSupported = true, applyingEdit = false;
   let syncTimer, syncFlight = null, syncAgain = false, sessionEpoch = 0, pendingTitle = null, imageTarget = null, localSaveFailed = false;
+  let noteDrag = null, noteRename = null;
   let notes = loadNotes(GUEST_KEY);
   let favorites = readJSON(FAVORITES_KEY, {text:[],highlight:[]});
   if (!favorites || !Array.isArray(favorites.text) || !Array.isArray(favorites.highlight)) favorites = {text:[],highlight:[]};
@@ -168,10 +169,24 @@
   }
   function geometry(w) { w.el.classList.add('direct-editor'); }
   function snapshot(w) { return JSON.stringify({html:w.editor.innerHTML,bg:w.bg,textWidth:w.textWidth,objects:w.objects,kind:w.kind,onyxRows:w.onyxRows,shipments:w.shipments,folders:w.folders,location:w.location,title:w.title}); }
+  function reconcileNoteTitle(w, note) {
+    const previous=w.savedNote;
+    if(!note||!previous||note.deletedAt||previous.deletedAt||previous.updatedAt!==w.savedAt||previous.content!==note.content||(previous.title||'')!==w.title)return false;
+    const title=note.title||'';
+    if(w.title!==title){
+      const renameSnapshot=value=>{const data=JSON.parse(value);data.title=title;return JSON.stringify(data);};
+      w.title=title;w.savedSnapshot=renameSnapshot(w.savedSnapshot);w.history=w.history.map(renameSnapshot);
+      w.el.setAttribute('aria-label',title||'Nota sem título');
+      if(detached)document.title=`${title||'Sem título'} — Notas Exclusivas Pro`;
+    }
+    // A title-only update must not save or replace text still being edited.
+    w.savedAt=note.updatedAt;w.savedNote={...note};return true;
+  }
   function commit(w, history = true, save = false) {
     if (!windows.has(w.id)) return false;
     captureTextBoxes(w);
     notes=[...latestById([...loadNotes(storageKey()),...notes]).values()];
+    reconcileNoteTitle(w,notes.find(n=>n.id===w.id));
     if (history) { const s = snapshot(w); if (w.history[w.historyIndex] !== s) { w.history.splice(w.historyIndex+1);w.history.push(s);if(w.history.length>60)w.history.shift();w.historyIndex=w.history.length-1; } }
     w.dirty=snapshot(w)!==w.savedSnapshot;
     if(!save){w.footer.textContent=w.dirty?'Alterações por guardar':'Sem alterações';return true;}
@@ -185,7 +200,7 @@
       if(old) notes[notes.indexOf(old)] = note; else notes.unshift(note);
     }
     const ok = persist();
-    if(ok){w.savedSnapshot=snapshot(w);w.savedAt=notes.find(n=>n.id===w.id)?.updatedAt;w.dirty=false;}
+    if(ok){w.savedSnapshot=snapshot(w);w.savedNote={...notes.find(n=>n.id===w.id)};w.savedAt=w.savedNote.updatedAt;w.dirty=false;}
     w.footer.textContent = ok ? 'Guardado neste dispositivo' : 'Não guardado — armazenamento cheio';
     if(ok) { status.textContent = user ? 'Guardado neste dispositivo; a aguardar sincronização' : 'Guardado neste dispositivo';scheduleSync(); }
     renderNotes(); return ok;
@@ -216,7 +231,7 @@
     rect.x=clamp(initial.x,0,workspace.clientWidth-rect.w);rect.y=clamp(initial.y,0,workspace.clientHeight-40);
     const el=document.createElement('section');el.className='note-window';el.innerHTML=`<div class="window-bar"><button data-window="save" aria-label="Guardar nota" title="Guardar nota">${noteActionIcon('save')}</button><button data-window="share" aria-label="Compartilhar nota" title="Compartilhar nota">${noteActionIcon('share')}</button><button data-window="menu" aria-label="Opções de formatação" title="Opções de formatação" aria-expanded="false">${noteActionIcon('menu')}</button><button data-window="close" aria-label="Fechar nota" title="Fechar nota sem eliminar">${noteActionIcon('close')}</button></div><div class="note-scroll"><div class="note-paper"><div class="note-editor" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui…" spellcheck="true"></div></div></div><div class="window-footer"><span>${note?'Guardado neste dispositivo':'Pronto para escrever'}</span><span>Gravação manual</span></div>`;
     const w={id:note?.id||makeId(),title:note?.title === 'Sem título' ? '' : note?.title || '',el,editor:el.querySelector('.note-editor'),paper:el.querySelector('.note-paper'),footer:el.querySelector('.window-footer span'),...data,rect,selected:null,history:[],historyIndex:0};
-    if(!note?.content&&route.searchParams.get('kind')==='onyx'){w.kind='onyx';w.onyxRows=decodeOnyx([{}, {}, {}, {}]);}w.editor.innerHTML=data.html;windows.set(w.id,w);workspace.append(el);geometry(w);linkify(w,false);display(w);w.history=[snapshot(w)];w.savedSnapshot=snapshot(w);w.savedAt=note?.updatedAt;w.dirty=false;
+    if(!note?.content&&route.searchParams.get('kind')==='onyx'){w.kind='onyx';w.onyxRows=decodeOnyx([{}, {}, {}, {}]);}w.editor.innerHTML=data.html;windows.set(w.id,w);workspace.append(el);geometry(w);linkify(w,false);display(w);w.history=[snapshot(w)];w.savedSnapshot=snapshot(w);w.savedAt=note?.updatedAt;w.savedNote=note?{...note}:null;w.dirty=false;
     const destination=validLocation({noteId:route.searchParams.get('parent'),folderId:route.searchParams.get('folder')});if(destination){w.location=destination;commit(w);}
     el.addEventListener('pointerdown',()=>activate(w));
     w.zoom=1;
@@ -267,21 +282,135 @@
     if(existing){const now=timestamp(existing.updatedAt);notes[notes.indexOf(existing)]={...existing,deletedAt:now,updatedAt:now};if(!persist())return;scheduleSync();}
     if(w)removeWindow(w);renderNotes();
   }
+  function homeOrderKey(){return `${storageKey()}:home-order`;}
+  function orderedHomeNotes(){
+    const stored=readJSON(homeOrderKey(),[]),order=Array.isArray(stored)?[...new Set(stored.filter(id=>typeof id==='string'))]:[];
+    const rank=new Map(order.map((id,index)=>[id,index]));
+    return notes.filter(n=>!n.deletedAt).sort((a,b)=>{
+      const ar=rank.get(a.id),br=rank.get(b.id);
+      if(ar!==undefined&&br!==undefined)return ar-br;
+      if(ar!==undefined)return 1;if(br!==undefined)return -1;
+      return Date.parse(b.updatedAt)-Date.parse(a.updatedAt)||a.id.localeCompare(b.id);
+    });
+  }
+  function saveHomeOrder(ids){
+    try{localStorage.setItem(homeOrderKey(),JSON.stringify(ids));return true;}
+    catch{status.textContent='Não foi possível guardar a ordem das notas neste dispositivo.';return false;}
+  }
+  function startNoteRename(id){
+    if(noteDrag)return;
+    if(noteRename?.id===id){noteRename.input.focus();return;}
+    noteRename?.cancel();
+    const note=notes.find(n=>n.id===id&&!n.deletedAt),list=$('#sidebar-notes-list');
+    const item=[...list.children].find(el=>el.dataset.noteId===id);
+    if(!note||!item)return;
+    const row=item.querySelector('.sidebar-title-row'),open=item.querySelector('.sidebar-note-open'),remove=item.querySelector('.sidebar-delete-btn');
+    const form=document.createElement('form');form.className='sidebar-title-form';
+    const input=document.createElement('input');input.className='sidebar-title-input';input.type='text';input.value=note.title||'';input.maxLength=250;input.required=true;input.autocomplete='off';input.setAttribute('aria-label','Novo título da nota');
+    const save=document.createElement('button');save.type='submit';save.className='sidebar-title-save';save.textContent='✓';save.title='Guardar título';save.setAttribute('aria-label','Guardar título');
+    const cancel=document.createElement('button');cancel.type='button';cancel.className='sidebar-title-cancel';cancel.textContent='×';cancel.title='Cancelar';cancel.setAttribute('aria-label','Cancelar alteração do título');
+    const finish=()=>{noteRename=null;renderNotes();[...list.children].find(el=>el.dataset.noteId===id)?.querySelector('.sidebar-rename-btn')?.focus({preventScroll:true});};
+    noteRename={id,input,cancel:finish};open.disabled=true;remove.disabled=true;
+    form.append(input,save,cancel);row.replaceChildren(form);item.classList.add('is-renaming');
+    cancel.addEventListener('click',finish);
+    input.addEventListener('input',()=>input.setCustomValidity(''));
+    form.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();finish();}});
+    form.addEventListener('submit',e=>{
+      e.preventDefault();const title=input.value.trim();
+      if(!title){input.setCustomValidity('Escreva um título para a nota.');input.reportValidity();return;}
+      notes=[...latestById([...loadNotes(storageKey()),...notes]).values()];
+      const previous=notes.find(n=>n.id===id&&!n.deletedAt);
+      if(!previous){status.textContent='Esta nota já não está disponível na lista.';finish();return;}
+      if(title===(previous.title||'')){finish();return;}
+      if(!saveHomeOrder(orderedHomeNotes().map(n=>n.id)))return;
+      const renamed={...previous,title,titleHtml:'',updatedAt:timestamp(previous.updatedAt)};
+      // The per-note entry is an atomic save and is read by every app window.
+      // Keep the old in-memory title if storage is full so retry/cancel stays safe.
+      try{localStorage.setItem(`${storageKey()}:entry:${id}`,JSON.stringify(renamed));}
+      catch{status.textContent='Não foi possível guardar o título neste dispositivo. Pode tentar novamente.';return;}
+      notes[notes.indexOf(previous)]=renamed;
+      const w=windows.get(id);if(w)reconcileNoteTitle(w,renamed);
+      scheduleSync();status.textContent=user?'Título guardado; a aguardar sincronização.':'Título guardado neste dispositivo.';finish();
+    });
+    input.focus({preventScroll:true});input.select();
+  }
+  function bindNoteReorder(item){
+    item.addEventListener('pointerdown',event=>{
+      if(event.button!==2||event.pointerType==='touch'||noteDrag||noteRename||event.target.closest('.sidebar-rename-btn,.sidebar-delete-btn,form'))return;
+      event.preventDefault();event.stopPropagation();
+      const list=$('#sidebar-notes-list'),initial=[...list.children].map(el=>el.dataset.noteId),pointerId=event.pointerId;
+      const rect=item.getBoundingClientRect(),offsetX=event.clientX-rect.left,offsetY=event.clientY-rect.top;
+      let x=event.clientX,y=event.clientY,started=false,finished=false,ghost=null,frame=0,lastFrame=0;
+      const inside=()=>{const r=list.getBoundingClientRect();return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;};
+      const position=()=>{
+        if(!started)return;
+        ghost.style.left=`${x-offsetX}px`;ghost.style.top=`${y-offsetY}px`;
+        const bounds=list.getBoundingClientRect();if(x<bounds.left||x>bounds.right)return;
+        const before=[...list.children].find(el=>el!==item&&y<el.getBoundingClientRect().top+el.getBoundingClientRect().height/2);
+        if((before||null)!==item.nextElementSibling)list.insertBefore(item,before||null);
+      };
+      const scroll=time=>{
+        if(finished||!started)return;
+        const r=list.getBoundingClientRect(),dt=lastFrame?Math.min(32,time-lastFrame):16;lastFrame=time;
+        if(x>=r.left&&x<=r.right){
+          const edge=Math.min(48,r.height/4);let speed=0;
+          if(y<r.top+edge)speed=-Math.min(1,(r.top+edge-y)/edge);
+          else if(y>r.bottom-edge)speed=Math.min(1,(y-r.bottom+edge)/edge);
+          if(speed){list.scrollTop+=speed*dt*.6;position();}
+        }
+        frame=requestAnimationFrame(scroll);
+      };
+      const finish=save=>{
+        if(finished)return;finished=true;cancelAnimationFrame(frame);
+        list.removeEventListener('pointermove',move);list.removeEventListener('pointerup',up);list.removeEventListener('pointercancel',cancel);list.removeEventListener('lostpointercapture',cancel);
+        document.removeEventListener('keydown',key,true);window.removeEventListener('blur',cancel);document.removeEventListener('visibilitychange',visibility);
+        if(list.hasPointerCapture(pointerId))list.releasePointerCapture(pointerId);
+        ghost?.remove();item.classList.remove('is-dragging');document.body.classList.remove('reordering-notes');noteDrag=null;
+        const order=[...list.children].map(el=>el.dataset.noteId);
+        if(save&&started&&inside()&&order.some((id,i)=>id!==initial[i])&&saveHomeOrder(order))status.textContent='Ordem das notas guardada neste dispositivo.';
+        renderNotes();
+      };
+      const move=e=>{
+        if(e.pointerId!==pointerId)return;e.preventDefault();x=e.clientX;y=e.clientY;
+        if(!(e.buttons&2)){finish(true);return;}
+        if(!started&&Math.hypot(x-event.clientX,y-event.clientY)>=6){
+          started=true;ghost=item.cloneNode(true);ghost.className='sidebar-note-item sidebar-note-drag-preview';ghost.setAttribute('aria-hidden','true');ghost.inert=true;ghost.style.width=`${rect.width}px`;document.body.append(ghost);
+          item.classList.add('is-dragging');document.body.classList.add('reordering-notes');frame=requestAnimationFrame(scroll);
+        }
+        position();
+      };
+      const up=e=>{if(e.pointerId===pointerId){x=e.clientX;y=e.clientY;finish(true);}};
+      const cancel=e=>{if(!e||e.pointerId===undefined||e.pointerId===pointerId)finish(false);};
+      const key=e=>{if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();finish(false);}};
+      const visibility=()=>{if(document.hidden)finish(false);};
+      noteDrag={cancel:()=>finish(false)};
+      list.addEventListener('pointermove',move);list.addEventListener('pointerup',up);list.addEventListener('pointercancel',cancel);list.addEventListener('lostpointercapture',cancel);
+      document.addEventListener('keydown',key,true);window.addEventListener('blur',cancel);document.addEventListener('visibilitychange',visibility);
+      try{list.setPointerCapture(pointerId);}catch{finish(false);}
+    });
+  }
   function renderNotes(){
-    const list=$('#sidebar-notes-list');list.replaceChildren();
-    const visible=notes.filter(n=>!n.deletedAt).sort((a,b)=>Date.parse(b.updatedAt)-Date.parse(a.updatedAt));
+    if(noteDrag||noteRename)return;
+    const list=$('#sidebar-notes-list'),scrollTop=list.scrollTop;list.replaceChildren();
+    const visible=orderedHomeNotes();
     if(!visible.length){const p=document.createElement('p');p.className='empty-list';p.textContent='Ainda não existem notas guardadas.';list.append(p);}
     visible.forEach(note=>{
-      const item=document.createElement('div');item.className=`sidebar-note-item${windows.has(note.id)?' active':''}`;
-      const open=document.createElement('button');open.className='sidebar-note-open';const heading=document.createElement('strong'),preview=document.createElement('small');
-      heading.textContent=note.title||'Sem título';preview.textContent=plainText(note.content)||'Imagem ou nota vazia';open.append(heading,preview);open.addEventListener('click',()=>openDetached(note.id));
+      const item=document.createElement('div');item.className=`sidebar-note-item${windows.has(note.id)?' active':''}`;item.dataset.noteId=note.id;
+      const open=document.createElement('button');open.className='sidebar-note-open';open.type='button';open.setAttribute('aria-label',`Abrir nota ${note.title||'Sem título'}`);open.title='Abrir nota · botão direito premido para ordenar';open.addEventListener('click',()=>openDetached(note.id));
+      const content=document.createElement('div');content.className='sidebar-note-content';
+      const row=document.createElement('div');row.className='sidebar-title-row';
+      const heading=document.createElement('strong'),preview=document.createElement('small');heading.textContent=note.title||'Sem título';preview.textContent=plainText(note.content)||'Imagem ou nota vazia';
+      const rename=document.createElement('button');rename.className='sidebar-rename-btn';rename.type='button';rename.title='Renomear nota';rename.setAttribute('aria-label',`Renomear nota ${note.title||'Sem título'}`);rename.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m16 3 5 5M4 15 16 3a2.1 2.1 0 0 1 3 3L7 18l-4 1 1-4Z"/></svg>';rename.addEventListener('click',()=>startNoteRename(note.id));
+      row.append(heading,rename);content.append(row,preview);
       const remove=document.createElement('button');remove.className='sidebar-delete-btn';remove.type='button';remove.setAttribute('aria-label',`Eliminar nota ${note.title||'Sem título'}`);remove.title='Mover para Notas excluídas';remove.textContent='×';remove.addEventListener('click',e=>{e.stopPropagation();deleteNoteById(note.id);});
-      item.append(open,remove);list.append(item);
+      item.append(open,content,remove);bindNoteReorder(item);list.append(item);
     });
+    list.scrollTop=scrollTop;
   }
   function openSidebar(){closeMenu();document.body.classList.add('notes-home');$('#sidebar').classList.add('active');$('#sidebar').setAttribute('aria-hidden','false');$('#sidebar-backdrop').hidden=false;}
   function closeSidebar(restoreEditor=false){
     if(!detached&&!windows.size&&!restoreEditor)return;
+    noteDrag?.cancel();noteRename?.cancel();
     if(restoreEditor)ensurePrimaryEditor();
     document.body.classList.remove('notes-home');$('#sidebar').classList.remove('active');$('#sidebar').setAttribute('aria-hidden','true');$('#sidebar-backdrop').hidden=true;
     windows.forEach(fitPaper);
@@ -466,7 +595,7 @@
     editor.querySelectorAll('font[size="7"]').forEach(el=>{el.removeAttribute('size');el.style.fontSize=`${value}px`;});
     $('#size-label').textContent=value;rememberSelection(w);commit(w);closeMenu();
   }
-  function changeCase(mode){if(!active)return;restoreSelection(active);const text=getSelection().toString();if(text)command('insertText',mode==='upper'?text.toLocaleUpperCase('pt-PT'):mode==='title'?text.replace(/\p{L}+/gu,word=>word[0].toLocaleUpperCase('pt-PT')+word.slice(1)):text.toLocaleLowerCase('pt-PT'));}
+  function changeCase(mode){if(!active||!['upper','lower'].includes(mode))return;restoreSelection(active);const text=getSelection().toString();if(text)command('insertText',mode==='upper'?text.toLocaleUpperCase('pt-PT'):text.toLocaleLowerCase('pt-PT'));}
   function undo(w,direction){
     if(!w)return;const index=w.historyIndex+direction;if(index<0||index>=w.history.length)return;
     const previousBox=w.editBoxId;w.historyIndex=index;const s=JSON.parse(w.history[index]);w.editor.innerHTML=s.html;w.bg=s.bg;w.textWidth=s.textWidth;w.objects=s.objects;w.kind=s.kind||'normal';w.onyxRows=decodeOnyx(s.onyxRows);w.shipments=decodeShipments(s.shipments);w.folders=decodeFolders(s.folders);w.location=validLocation(s.location);w.title=s.title??w.title;w.selected=null;w.editBoxId=w.objects.some(o=>o.id===previousBox)?previousBox:null;savedRange=null;display(w);commit(w,false);editingSurface(w).focus();closeMenu();
@@ -575,10 +704,11 @@
         try{localStorage.removeItem(GUEST_KEY);for(const key of Object.keys(localStorage)){if(key.startsWith(`${GUEST_KEY}:entry:`)){const n=readJSON(key,null),saved=notes.find(v=>v.id===n?.id);if(saved&&Date.parse(saved.updatedAt)>=Date.parse(n.updatedAt))localStorage.removeItem(key);}}}catch{}
         windows.forEach(w=>{
           const n=notes.find(item=>item.id===w.id);if(!n)return;
+          if(reconcileNoteTitle(w,n))return;
           if(w.dirty)return;
           if(n.deletedAt){removeWindow(w);return;}
           if(n.updatedAt!==previous.get(w.id)){
-            const data=decode(n.content);w.editor.innerHTML=data.html;w.title=n.title||'';w.bg=data.bg;w.textWidth=data.textWidth;w.objects=data.objects;w.kind=data.kind;w.onyxRows=data.onyxRows;w.shipments=data.shipments;w.folders=data.folders;w.location=data.location;w.history=[snapshot(w)];w.historyIndex=0;w.savedSnapshot=snapshot(w);w.savedAt=n.updatedAt;w.selected=null;if(active===w)savedRange=null;display(w);
+            const data=decode(n.content);w.editor.innerHTML=data.html;w.title=n.title||'';w.bg=data.bg;w.textWidth=data.textWidth;w.objects=data.objects;w.kind=data.kind;w.onyxRows=data.onyxRows;w.shipments=data.shipments;w.folders=data.folders;w.location=data.location;w.history=[snapshot(w)];w.historyIndex=0;w.savedSnapshot=snapshot(w);w.savedAt=n.updatedAt;w.savedNote={...n};w.selected=null;if(active===w)savedRange=null;display(w);
           }
         });
         if(detached&&!active&&notes.some(n=>n.id===detachedId&&!n.deletedAt))restoreWorkspace();renderNotes();status.textContent=[...windows.values()].some(w=>w.dirty)?'Notas guardadas sincronizadas · existem alterações por guardar':'Sincronizado';
@@ -594,6 +724,7 @@
   function setSession(session){
     trashSelection.clear();
     const next=session?.user||null;if(next?.id===user?.id){user=next;setAuthView();return;}
+    noteDrag?.cancel();noteRename?.cancel();
     saveWorkspace();sessionEpoch++;clearTimeout(syncTimer);windows.forEach(w=>w.el.remove());windows.clear();active=null;savedRange=null;closeMenu();
     document.querySelectorAll('dialog[open]').forEach(d=>d.close());pendingTitle=null;user=next;notes=loadNotes(storageKey());$('#empty-workspace').hidden=false;setAuthView();restoreWorkspace();renderNotes();if(user)syncNotes();
   }
@@ -624,10 +755,11 @@
   addEventListener('beforeunload',e=>{if(localSaveFailed||[...windows.values()].some(w=>w.dirty)){e.preventDefault();e.returnValue='';}});
   let storageTimer;
   addEventListener('storage',e=>{
+    if(e.key===homeOrderKey()){renderNotes();return;}
     if(e.key!==storageKey()&&!e.key?.startsWith(`${storageKey()}:entry:`))return;
     clearTimeout(storageTimer);storageTimer=setTimeout(()=>{
     const previous=new Map(notes.map(n=>[n.id,n.updatedAt]));notes=[...latestById([...notes,...loadNotes(storageKey())]).values()];
-    windows.forEach(w=>{const n=notes.find(n=>n.id===w.id);if(!n||n.updatedAt===previous.get(w.id)||w.dirty)return;if(n.deletedAt){removeWindow(w);return;}const data=decode(n.content);w.editor.innerHTML=data.html;w.bg=data.bg;w.textWidth=data.textWidth;w.objects=data.objects;w.kind=data.kind;w.onyxRows=data.onyxRows;w.shipments=data.shipments;w.folders=data.folders;w.location=data.location;w.title=n.title||'';w.history=[snapshot(w)];w.historyIndex=0;w.savedSnapshot=snapshot(w);w.savedAt=n.updatedAt;savedRange=null;display(w);});renderNotes();scheduleSync();},35);
+    windows.forEach(w=>{const n=notes.find(n=>n.id===w.id);if(!n||n.updatedAt===previous.get(w.id)||reconcileNoteTitle(w,n)||w.dirty)return;if(n.deletedAt){removeWindow(w);return;}const data=decode(n.content);w.editor.innerHTML=data.html;w.bg=data.bg;w.textWidth=data.textWidth;w.objects=data.objects;w.kind=data.kind;w.onyxRows=data.onyxRows;w.shipments=data.shipments;w.folders=data.folders;w.location=data.location;w.title=n.title||'';w.history=[snapshot(w)];w.historyIndex=0;w.savedSnapshot=snapshot(w);w.savedAt=n.updatedAt;w.savedNote={...n};savedRange=null;display(w);});renderNotes();scheduleSync();},35);
   });
   addEventListener('online',()=>{if(user)syncNotes();});addEventListener('focus',()=>{if(user)syncNotes();});
   addEventListener('resize',()=>{windows.forEach(fitPaper);positionOptions();});
@@ -808,6 +940,9 @@
   $('#spelling-language').value=spellingLanguage;$('#spelling-language').addEventListener('change',e=>{spellingLanguage=e.target.value;spellingJobs.clear();try{localStorage.setItem(GUEST_KEY+':spelling-language',spellingLanguage);}catch{}applySpellingLanguage();});
   applySpellingLanguage();
 
+  // Pointer capture and re-rendering keep their target on this stable list.
+  $('#sidebar-notes-list').addEventListener('contextmenu',e=>{if(!e.target.closest('input'))e.preventDefault();});
+  $('#sidebar-notes-list').addEventListener('auxclick',e=>{if(e.button===2&&!e.target.closest('input'))e.preventDefault();});
   setupMenu();setupLinks();setAuthView();restoreWorkspace();renderNotes();
   if(cloud){cloud.auth.getSession().then(({data})=>setSession(data.session)).catch(()=>{status.textContent='Sem ligação à conta; notas disponíveis neste dispositivo.';});cloud.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>setSession(session),0);});}
   if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').then(reg=>reg.update()).catch(()=>{}));

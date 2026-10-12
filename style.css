@@ -85,6 +85,26 @@ body.notes-home #new-note-btn{display:block}
 #new-note-btn:hover{background:#125d79}
 
 /* Options reserve space outside the note instead of covering text. */
+/* Home titles have their own controls, separate from the button that opens a note. */
+.sidebar-note-item>.sidebar-note-open{position:absolute;inset:0;min-height:0;height:100%;padding:0}
+.sidebar-note-content{position:relative;min-height:82px;padding:14px 42px 14px 16px;pointer-events:none}
+.sidebar-title-row{display:flex;align-items:center;gap:5px;min-width:0;min-height:26px}
+.sidebar-title-row>strong{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:19px;font-weight:500;line-height:25px;color:#29343f}
+.sidebar-note-content>small{display:block;margin-top:4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:15px;line-height:21px;color:#909ca6}
+.sidebar-rename-btn{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:28px;padding:5px;border:0;border-radius:6px;background:transparent;color:#70828f;pointer-events:auto}
+.sidebar-rename-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.sidebar-rename-btn:hover{color:#176785;background:#e7f1f5}
+.sidebar-title-form{display:flex;align-items:center;gap:4px;width:100%;min-width:0;pointer-events:auto}
+.sidebar-title-input{min-width:0;width:100%;flex:1;padding:5px 6px;border:1px solid #6895a5;border-radius:5px;background:#fff;color:#29343f;font-size:17px;line-height:24px}
+.sidebar-title-form button{flex:none;width:28px;height:30px;padding:0;border:0;background:#edf4f5;color:#245c67;font-size:19px}
+.sidebar-title-form .sidebar-title-cancel{background:transparent;color:#687b85}
+.sidebar-note-item.is-renaming .sidebar-note-open{cursor:default;background:transparent}
+.sidebar-note-item.is-renaming .sidebar-delete-btn{opacity:.4;cursor:default}
+.sidebar-note-item.is-dragging{opacity:.35;border-style:dashed;border-color:#327c93}
+.sidebar-note-drag-preview{position:fixed;z-index:150;pointer-events:none;box-shadow:0 8px 24px #263e5130;border-color:#6895a5}
+body.reordering-notes,body.reordering-notes *{cursor:grabbing!important;user-select:none!important}
+@media(max-width:390px){.sidebar-title-row>strong{font-size:17px}.sidebar-note-content>small{font-size:14px}}
+
 .options-heading{padding:10px 7px 14px;font-size:15px;font-weight:600;color:#36515e;border-bottom:1px solid #e7edf1;margin-bottom:8px}
 body.note-options-open #workspace{right:346px}
 body.note-options-open #custom-context-menu{position:fixed;left:auto!important;right:14px;top:var(--note-options-top,120px)!important;bottom:14px;width:318px;height:auto;max-height:none!important;padding:12px;border:1px solid #dce5ea;border-radius:14px;background:#fff;box-shadow:0 8px 24px #2c4a6012;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
