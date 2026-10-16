@@ -6,6 +6,7 @@
   const gate = $('#private-access');
   const form = $('#private-login-form');
   const message = $('#private-access-message');
+  const startupStatus = $('#private-startup-status');
   const devicesDialog = $('#private-devices-dialog');
   const devicesList = $('#private-devices-list');
   const devicesMessage = $('#private-devices-message');
@@ -21,6 +22,7 @@
   let approvedIdentity = '';
   let epoch = 0;
   let checkFlight = null;
+  let checkEpoch = null;
   let checkAgain = false;
   let appLoading = null;
   let appReady = false;
@@ -76,15 +78,21 @@
   }
   function observeSession(session) {
     const nextIdentity = identity(session);
-    if (nextIdentity !== currentIdentity) {
+    const changed = nextIdentity !== currentIdentity;
+    if (changed) {
       epoch++;
       currentIdentity = nextIdentity;
       currentSession = session;
       lock(session ? 'checking' : 'unauthenticated');
     } else currentSession = session;
+    return changed;
   }
   function renderState(nextReason, customMessage = '') {
     reason = nextReason;
+    // Session restoration is not a login screen. Keep notes locked, and only
+    // show the access card after a confirmed denial, missing session or error.
+    gate.hidden = nextReason === 'checking' || nextReason === 'authorized';
+    if (startupStatus) startupStatus.hidden = nextReason !== 'checking';
     const messages = {
       checking: 'A verificar o acesso pessoal…',
       unauthenticated: 'Inicie sessão com a sua conta para abrir as notas.',
@@ -135,16 +143,21 @@
     });
     return appLoading;
   }
-  async function validate() {
+  async function validate({fresh = false} = {}) {
     if (!cloud) { lock('configuration'); return false; }
-    if (checkFlight) { checkAgain = true; return checkFlight; }
+    if (checkFlight) { if (fresh || checkEpoch !== epoch) checkAgain = true; return checkFlight; }
     checkFlight = (async () => {
       let requestEpoch = epoch;
+      checkEpoch = requestEpoch;
       try {
         const {data, error} = await cloud.auth.getSession();
+        // A logout or account change can arrive while session restoration is
+        // pending. Never let that older result restore the previous identity.
+        if (requestEpoch !== epoch) { checkAgain = true; return false; }
         if (error) throw new Error('Session unavailable');
         observeSession(data.session);
         requestEpoch = epoch;
+        checkEpoch = requestEpoch;
         const session = currentSession;
         const requestedIdentity = currentIdentity;
         if (!session || !requestedIdentity) { lock('unauthenticated'); return false; }
@@ -182,6 +195,7 @@
     try { return await checkFlight; }
     finally {
       checkFlight = null;
+      checkEpoch = null;
       if (checkAgain) { checkAgain = false; setTimeout(() => void validate(), 0); }
     }
   }
@@ -242,7 +256,9 @@
             if (device.is_current) { lock('session_revoked'); await signOut(); return; }
             if (reason === 'device_limit') {
               devicesDialog.close();
-              await validate();
+              // A response started before revocation cannot confirm the newly
+              // freed place; always queue a fresh admission check.
+              await validate({fresh: true});
             } else await listDevices();
           } catch { devicesMessage.textContent = 'Não foi possível remover o acesso. Atualize a lista e tente novamente.'; }
           finally { remove.disabled = false; }
@@ -303,7 +319,13 @@
     try { cloud = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey); }
     catch { lock('configuration'); return; }
     cloud.auth.onAuthStateChange((_event, session) => {
-      observeSession(session);
+      const changed = observeSession(session);
+      // SIGNED_OUT also invalidates a pending initial getSession(), before an
+      // identity has been observed in this page.
+      if (_event === 'SIGNED_OUT' && !changed) { epoch++; lock('unauthenticated'); }
+      // getSession() already covers the initial identity. Supabase can also
+      // repeat SIGNED_IN on focus; neither needs a second identical RPC.
+      if (!changed && ['INITIAL_SESSION', 'SIGNED_IN'].includes(_event)) return;
       // Supabase callbacks must return before another auth/API request starts.
       setTimeout(() => void validate(), 0);
     });

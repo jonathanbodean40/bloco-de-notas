@@ -105,6 +105,7 @@ body.notes-home #new-note-btn{display:block}
 body.reordering-notes,body.reordering-notes *{cursor:grabbing!important;user-select:none!important}
 
 /* The editor is mounted only after server authorization. */
+.private-startup-status{position:fixed;top:16px;left:20px;margin:0;color:#587581;font-size:13px}
 body.private-locked>#private-app,body.private-locked>.sidebar-note-drag-preview,body.private-locked>#spelling-suggestions{display:none!important}
 body.private-locked.private-loading>#private-app{display:block!important;visibility:hidden!important}
 body.private-locked.private-loading>#private-app *{visibility:hidden!important}

@@ -5,11 +5,13 @@
   <meta name="theme-color" content="#f3f5f7"><meta name="description" content="Bloco de notas pessoal. Acesso reservado ao proprietário."><meta name="robots" content="noindex, nofollow, noarchive">
   <title>Notas Exclusivas Pro</title>
   <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Notas Pro">
+  <link rel="preload" href="app.js" as="script">
   <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
   <style>[hidden]{display:none!important}body.private-locked>#private-app{display:none!important}</style>
 </head>
 <body class="private-locked">
-  <section id="private-access" class="private-access" aria-labelledby="private-access-title">
+  <p id="private-startup-status" class="private-startup-status" role="status" aria-live="polite">A verificar o acesso pessoal.</p>
+  <section id="private-access" class="private-access" aria-labelledby="private-access-title" hidden>
     <div class="private-card">
       <p class="private-brand">Notas Exclusivas Pro</p>
       <h1 id="private-access-title">Acesso pessoal</h1>
@@ -27,9 +29,9 @@
         <button id="private-logout-btn" type="button" hidden>Terminar esta sessão</button>
       </div>
       <p class="private-hint">Utilize a mesma conta nos seus dispositivos. Um navegador ou perfil diferente ocupa outro acesso.</p>
-      <noscript><p>Ative o JavaScript para iniciar sessão. As notas permanecem bloqueadas.</p></noscript>
     </div>
   </section>
+  <noscript><p>Ative o JavaScript para iniciar sessão. As notas permanecem bloqueadas.</p></noscript>
   <dialog id="private-devices-dialog" class="private-devices-dialog" aria-labelledby="private-devices-title">
     <div class="dialog-heading"><h2 id="private-devices-title">Dispositivos autorizados</h2><button id="private-devices-close" type="button" class="plain-btn" aria-label="Fechar dispositivos">✕</button></div>
     <p>Limite de três acessos. Remova um acesso que já não utiliza para entrar noutro dispositivo.</p>
