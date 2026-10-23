@@ -67,6 +67,65 @@ function device(cloud,seed=[]) {
   });
   return {items,local,engine};
 }
+test('datas equivalentes com formatos distintos não criam falso conflito na migração',async()=>{
+  const cloud=new FakeDropbox();
+  const id='same-instant';
+  const remote=basic(id,'<p>Conteúdo e objetos iguais</p>','2026-10-22T10:37:10.98+00:00');
+  const local={...remote,updatedAt:'2026-10-22T10:37:10.980Z'};
+  const a=device(cloud,[remote]);
+  await a.engine.enable();
+  const revBefore=JSON.parse(cloud.files.get(INDEX).body).entries[id].rev;
+  const b=device(cloud,[local]);
+  const result=await b.engine.enable();
+  assert.equal(result.conflicts.length,0);
+  assert.equal(result.pushed,0,'Nenhuma escrita remota quando a nota é equivalente');
+  assert.equal(b.engine.enabled(),true);
+  const revAfter=JSON.parse(cloud.files.get(INDEX).body).entries[id].rev;
+  assert.equal(revAfter,revBefore);
+});
+test('conteúdo realmente diferente continua bloqueado mesmo com timestamp equivalente',async()=>{
+  const cloud=new FakeDropbox();
+  const a=device(cloud,[basic('distinct','Conteúdo remoto','2026-10-22T10:37:10.98+00:00')]);
+  await a.engine.enable();
+  const b=device(cloud,[basic('distinct','Conteúdo local','2026-10-22T10:37:10.980Z')]);
+  const result=await b.engine.reconcile();
+  assert.equal(result.conflicts.length,1);
+  assert.equal(b.items[0].content,'Conteúdo local');
+  assert.equal(db.deserialize(cloud.files.get(JSON.parse(cloud.files.get(INDEX).body).entries.distinct.path).body,owner).content,'Conteúdo remoto');
+});
+test('checkpoints históricos com datas não normalizadas são migrados sem upload',async()=>{
+  const crypto=require('node:crypto');
+  const cloud=new FakeDropbox();
+  const original=basic('legacy','Texto idêntico','2026-10-22T10:37:10.98+00:00');
+  const a=device(cloud,[original]);
+  await a.engine.enable();
+  const stored=JSON.parse(cloud.files.get(INDEX).body).entries.legacy;
+  const b=device(cloud,[{...original,updatedAt:'2026-10-22T10:37:10.980Z'}]);
+  const loc=b.items[0];
+  const legacyArray=[loc.id,loc.title,loc.titleHtml,loc.content,loc.updatedAt,loc.deletedAt];
+  const oldHash=crypto.createHash('sha256').update(JSON.stringify(legacyArray)).digest('hex');
+  b.local.setItem(b.engine.mapKey,JSON.stringify({legacy:{
+    path:stored.path,rev:stored.rev,hash:oldHash,syncedAt:loc.updatedAt
+  }}));
+  const result=await b.engine.reconcile();
+  assert.equal(result.pushed,0);
+  assert.equal(result.conflicts.length,0);
+  const checkpoint=b.engine.readMap().legacy;
+  assert.notEqual(checkpoint.hash,oldHash,'Checkpoint usa o novo hash normalizado');
+  assert.equal(checkpoint.rev,stored.rev);
+});
+test('datas de eliminação em formatos equivalentes também são comparadas semanticamente',async()=>{
+  const cloud=new FakeDropbox();
+  const remote={...basic('deleted','Texto que permanece na lápide','2026-10-22T10:37:10.98+00:00'),
+    deletedAt:'2026-10-22T10:37:10.98+00:00'};
+  const a=device(cloud,[remote]);await a.engine.enable();
+  const local={...remote,updatedAt:'2026-10-22T10:37:10.980Z',
+    deletedAt:'2026-10-22T10:37:10.980Z'};
+  const b=device(cloud,[local]);
+  const r=await b.engine.reconcile();
+  assert.equal(r.conflicts.length,0);
+  assert.equal(r.pushed,0);
+});
 test('migra duas notas para uma pasta central e recupera-as num segundo dispositivo',async()=>{
   const cloud=new FakeDropbox();
   const one=device(cloud,[basic('first','<p>A</p>'),basic('second','<p>B</p>')]);

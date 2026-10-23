@@ -29,12 +29,35 @@
     const match=/--([a-zA-Z0-9_-]+)\.keepnote\.json$/i.exec(String(filename||''));
     return match && match[1]===id.replace(/[^a-zA-Z0-9_-]/g,'-').slice(0,90);
   }
-  async function fingerprint(note) {
-    const n=checkNote(note);
-    const input=JSON.stringify([n.id,n.title,n.titleHtml,n.content,n.updatedAt,n.deletedAt]);
-    const bytes=new TextEncoder().encode(input);
+  async function hashValue(value) {
+    const bytes=new TextEncoder().encode(JSON.stringify(value));
     const digest=await root.crypto.subtle.digest('SHA-256',bytes);
     return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  function normalizedDate(value) {
+    if(!value)return null;
+    const stamp=Date.parse(value);
+    return Number.isFinite(stamp)?stamp:String(value);
+  }
+  async function fingerprint(note) {
+    const n=checkNote(note);
+    // Equal instants are equivalent even when Supabase serializes .980Z
+    // and Dropbox stores .98+00:00. Content and all other fields still
+    // require exact equality before any no-conflict conclusion.
+    return hashValue([n.id,n.title,n.titleHtml,n.content,
+      normalizedDate(n.updatedAt),normalizedDate(n.deletedAt)]);
+  }
+  async function fingerprintLegacy(note) {
+    const n=checkNote(note);
+    return hashValue([n.id,n.title,n.titleHtml,n.content,n.updatedAt,n.deletedAt]);
+  }
+  async function matchesCheckpoint(note,known,normalizedHash) {
+    if(!known)return false;
+    if(known.hash) {
+      return known.hash===normalizedHash ||
+        known.hash===await fingerprintLegacy(note);
+    }
+    return normalizedDate(note.updatedAt)===normalizedDate(known.syncedAt);
   }
   class Primary {
     constructor({owner,client,getNotes,importNote,applyRemote,storage}) {
@@ -169,7 +192,12 @@
               continue;
             }
             const localHash=await fingerprint(local);
-            if(localHash===known.hash || (!known.hash&&local.updatedAt===known.syncedAt)){
+            if(await matchesCheckpoint(local,known,localHash)){
+              // Migrate old raw-timestamp checkpoints without uploading data.
+              if(known.hash!==localHash) {
+                map[id]={...known,hash:localHash};
+                this.saveMap(map);
+              }
               result.unchanged++;continue;
             }
             await this.upload(local,entry,folder,map);result.pushed++;continue;
@@ -183,7 +211,7 @@
           } else {
             const localHash=await fingerprint(local);
             if(localHash!==remoteHash) {
-              const clean=!!known && (localHash===known.hash || (!known.hash&&local.updatedAt===known.syncedAt));
+              const clean=await matchesCheckpoint(local,known,localHash);
               if(!clean)throw conflict('Alterações diferentes em dois dispositivos; requer revisão');
               if(!this.applyRemote(remote,local))throw conflict('A nota local tem alterações por guardar ou uma versão mais recente');
               result.pulled++;
