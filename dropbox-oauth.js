@@ -49,6 +49,8 @@
       this.tokensKey = PREFIX + owner + ':' + this.appKey + ':tokens';
       this.pendingKey = PREFIX + owner + ':' + this.appKey + ':pending';
       this.refreshFlight = null;
+      this.vault = root.NotasDropboxTokenVault || null;
+      this.persistentError = null;
     }
     connected() {
       try {
@@ -59,6 +61,18 @@
     disconnect() {
       this.storage.removeItem(this.tokensKey);
       this.storage.removeItem(this.pendingKey);
+      this.vault?.forget(this.owner,this.appKey).catch(() => {});
+    }
+    async restorePersistent() {
+      if (this.connected() || !this.vault) return this.connected();
+      let refreshToken;
+      try { refreshToken=await this.vault.restore(this.owner,this.appKey); }
+      catch(err){this.persistentError=err.message;return false;}
+      if (!refreshToken) return false;
+      this.storage.setItem(this.tokensKey,JSON.stringify({
+        access_token:'',refresh_token:refreshToken,expires_at:0
+      }));
+      return true;
     }
     async begin(returnUrl) {
       const current = new URL(callbackUrl(this.location));
@@ -107,6 +121,10 @@
         expires_at: Date.now() + data.expires_in * 1000
       }));
       this.storage.removeItem(this.pendingKey);
+      if (this.vault && data.refresh_token) {
+        try { await this.vault.remember(this.owner,this.appKey,data.refresh_token); }
+        catch(err){this.persistentError=err.message;}
+      }
       return validatedReturnUrl(pending.returnUrl, new URL(callbackUrl(this.location)));
     }
     async getToken() {

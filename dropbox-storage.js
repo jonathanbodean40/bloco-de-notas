@@ -86,6 +86,16 @@
     };
   }
 
+  function importableNote(raw, owner, filename) {
+    const note = deserialize(raw, owner);
+    const match = /--([a-zA-Z0-9_-]+)\.keepnote\.json$/i.exec(String(filename || ''));
+    const safeId = note.id.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 90);
+    if (!match || match[1] !== safeId || note.deletedAt) {
+      throw new TypeError('Ficheiro Dropbox incompatível com a nota ou excluído');
+    }
+    return note;
+  }
+
   function revisionDecision(local, remote, knownRevision) {
     if (!remote) return 'create';
     if (!local) return 'remote-only';
@@ -189,7 +199,7 @@
   }
 
   const API = Object.freeze({FORMAT, folderPath, noteFilename, notePath, deepLink,
-    serialize, deserialize, revisionDecision, Client, DropboxError});
+    serialize, deserialize, importableNote, revisionDecision, Client, DropboxError});
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.NotasDropboxStorage = API;
 })(globalThis);

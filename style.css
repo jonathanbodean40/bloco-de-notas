@@ -175,4 +175,9 @@ body.note-options-open #custom-context-menu{position:fixed;left:auto!important;r
 #dropbox-dialog label input{display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:9px 11px}
 #dropbox-dialog .dialog-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 #dropbox-dialog small{display:block;margin-top:12px}
+.dropbox-primary-settings{margin-top:18px;padding:14px;border:1px solid #d9e3e9;border-radius:10px;background:#f7fafc}
+.dropbox-primary-settings h3{font-size:16px;margin:0 0 6px}
+.dropbox-primary-settings p{font-size:13px;line-height:1.5}
+.dropbox-conflict-list>div{background:#fff8e7;border:1px solid #dec58a;border-radius:9px;padding:10px;margin:8px 0}
+.dropbox-conflict-list button{width:100%;max-width:100%;white-space:normal}
 .window-bar [data-window="dropbox"]{font-size:22px}

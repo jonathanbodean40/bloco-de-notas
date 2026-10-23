@@ -21,6 +21,7 @@
   let syncTimer, syncFlight = null, syncAgain = false, sessionEpoch = 0, pendingTitle = null, imageTarget = null, localSaveFailed = false;
   let noteDrag = null, noteRename = null;
   let dropboxUI = null;
+  let lastSupabaseSyncOk = false;
   let notes = loadNotes(storageKey());
   let favorites = readJSON(FAVORITES_KEY, {text:[],highlight:[]});
   if (!favorites || !Array.isArray(favorites.text) || !Array.isArray(favorites.highlight)) favorites = {text:[],highlight:[]};
@@ -300,6 +301,47 @@
   function newNote(destination=null){openDetached(makeId(),destination,true);}
   function canDiscard(w){return !w?.dirty||confirm('Existem alterações por guardar. Sair sem guardar essas alterações?');}
   function saveNote(w){if(!w)return false;closeMenu();const ok=commit(w,true,true);if(ok)display(w);return ok;}
+  function importDropboxNote(note, allowDeleted = false) {
+    if (!privateAccess.authorized || !user || !note || typeof note.id !== 'string' || !note.id
+        || typeof note.content !== 'string' || Number.isNaN(Date.parse(note.updatedAt || ''))
+        || (note.deletedAt && !allowDeleted)) throw new Error('Esta nota Dropbox não pode ser importada');
+    if (notes.some(item => item.id === note.id) || loadNotes(storageKey()).some(item => item.id === note.id)) {
+      throw new Error('A nota já existe neste dispositivo e não será substituída');
+    }
+    const previous = notes;
+    notes = [...notes, note];
+    if (!persist()) {
+      notes = previous;
+      throw new Error('Não há espaço local suficiente para importar a nota');
+    }
+    scheduleSync();
+    renderNotes();
+    return true;
+  }
+  function applyDropboxRemote(note, expected) {
+    if (!privateAccess.authorized || !user || !note || !expected || note.id !== expected.id) return false;
+    const current = notes.find(n => n.id === expected.id);
+    const stored = loadNotes(storageKey()).find(n => n.id === expected.id);
+    if (!current || !stored || current.updatedAt !== expected.updatedAt ||
+        stored.updatedAt !== expected.updatedAt || Date.parse(note.updatedAt) <= Date.parse(expected.updatedAt)) return false;
+    const w = windows.get(note.id);
+    if (w?.dirty) return false;
+    const previousNotes = notes;
+    notes = notes.map(n => n.id === note.id ? note : n);
+    if (!persist()) { notes = previousNotes; return false; }
+    if (w && note.deletedAt) removeWindow(w);
+    else if (w) {
+      const data = decode(note.content);
+      w.editor.innerHTML=data.html;w.title=note.title||'';w.bg=data.bg;w.textWidth=data.textWidth;
+      w.objects=data.objects;w.kind=data.kind;w.onyxRows=data.onyxRows;w.shipments=data.shipments;
+      w.folders=data.folders;w.location=data.location;w.history=[snapshot(w)];w.historyIndex=0;
+      w.savedSnapshot=snapshot(w);w.savedAt=note.updatedAt;w.savedNote={...note};w.selected=null;
+      if(active===w)savedRange=null;display(w);
+    }
+    if(detached&&!active&&detachedId===note.id&&!note.deletedAt)restoreWorkspace();
+    renderNotes();
+    return true;
+  }
   function closeNote(w){if(!canDiscard(w))return;w.dirty=false;if(detached&&mobileNotes){const url=new URL(location.href);url.search='';url.hash='';location.assign(url.href);}else if(detached)window.close();else{removeWindow(w);openSidebar();}}
   function deleteNoteById(id){
     const existing=notes.find(n=>n.id===id&&!n.deletedAt),w=windows.get(id);
@@ -725,6 +767,30 @@
       try{
         if(!await privateAccess.validate()||epoch!==sessionEpoch)return;
         status.textContent='A sincronizar…';
+        if (dropboxUI?.primaryEnabled()) {
+          const remoteSync = await dropboxUI.syncPrimary();
+          if (epoch !== sessionEpoch) return;
+          if (remoteSync.conflicts.length) {
+            status.textContent = remoteSync.conflicts.length + ' conflito(s) Dropbox. As notas locais foram preservadas; reveja antes de continuar.';
+            return false;
+          }
+          const mirrorKey = GUEST_KEY + ':dropbox-supabase-backup:' + account.id;
+          const backed = readJSON(mirrorKey, {});
+          const pendingBackup = notes.filter(n => backed[n.id] !== n.updatedAt);
+          if (pendingBackup.length) {
+            let {error} = await cloud.from('notes').upsert(pendingBackup.map(n => noteRow(n,account)));
+            if (error && titleHtmlSupported && missingTitle(error)) {
+              titleHtmlSupported = false;
+              ({error} = await cloud.from('notes').upsert(pendingBackup.map(n => noteRow(n,account))));
+            }
+            if (error) throw error;
+            for (const n of pendingBackup) backed[n.id] = n.updatedAt;
+            try { localStorage.setItem(mirrorKey,JSON.stringify(backed)); } catch (_) {}
+          }
+          status.textContent = 'Dropbox sincronizado · backup Supabase atualizado';
+          renderNotes();
+          return true;
+        }
         const result=await fetchRemote(account);if(epoch!==sessionEpoch)return;if(result.error)throw result.error;
         const remote=(result.data||[]).map(n=>({id:n.id,title:n.title==='Sem título'?'':n.title,titleHtml:n.title_html||'',content:n.content,updatedAt:n.updated_at,deletedAt:n.deleted_at||null}));
         const remoteMap=latestById(remote),localMap=latestById([...loadNotes(storageKey()),...loadNotes(GUEST_KEY),...notes]);
@@ -751,9 +817,11 @@
         });
         if (dropboxUI) for (const n of notes) if (!n.deletedAt && previous.get(n.id)!==n.updatedAt) dropboxUI.queue(n.id);
         if(detached&&!active&&notes.some(n=>n.id===detachedId&&!n.deletedAt))restoreWorkspace();renderNotes();status.textContent=[...windows.values()].some(w=>w.dirty)?'Notas guardadas sincronizadas · existem alterações por guardar':'Sincronizado';
-      }catch{if(epoch===sessionEpoch)status.textContent='Guardado neste dispositivo; sincronização pendente. Verifique a ligação ou a conta.';}
+        lastSupabaseSyncOk=true;
+        return true;
+      }catch(err){lastSupabaseSyncOk=false;if(epoch===sessionEpoch)status.textContent='Guardado neste dispositivo; sincronização pendente: '+(err?.message||'verifique a ligação ou a conta');}
     })();
-    try{await syncFlight;}finally{syncFlight=null;if(syncAgain){syncAgain=false;scheduleSync();}}
+    try{return await syncFlight;}finally{syncFlight=null;if(syncAgain){syncAgain=false;scheduleSync();}}
   }
   function setAuthView(){
     $('#account-btn').classList.toggle('synced',privateAccess.authorized);$('#auth-message').textContent=`Sessão iniciada como ${user.email}`;
@@ -763,7 +831,7 @@
     trashSelection.clear();
     const next=session.user;if(next.id===user.id){user=next;setAuthView();return;}
     noteDrag?.cancel();noteRename?.cancel();
-    saveWorkspace();sessionEpoch++;clearTimeout(syncTimer);windows.forEach(w=>w.el.remove());windows.clear();active=null;savedRange=null;closeMenu();
+    saveWorkspace();sessionEpoch++;lastSupabaseSyncOk=false;clearTimeout(syncTimer);windows.forEach(w=>w.el.remove());windows.clear();active=null;savedRange=null;closeMenu();
     document.querySelectorAll('dialog[open]').forEach(d=>d.close());pendingTitle=null;user=next;notes=loadNotes(storageKey());$('#empty-workspace').hidden=false;setAuthView();restoreWorkspace();renderNotes();if(user)syncNotes();
   }
   $('#logout-btn').addEventListener('click',()=>void privateAccess.signOut());
@@ -961,6 +1029,15 @@
       getActiveId: () => active?.id || null,
       openNote: id => openDetached(id),
       getNote: id => notes.find(n => n.id === id && !n.deletedAt),
+      getNotes: () => notes.map(n => ({...n})),
+      importNote: note => importDropboxNote(note, true),
+      applyRemote: applyDropboxRemote,
+      requestSync: scheduleSync,
+      prepareActivation: async () => {
+        if ([...windows.values()].some(w => w.dirty)) throw new Error('Guarde todas as alterações antes da migração para Dropbox.');
+        const synced = await syncNotes();
+        if (!synced || !lastSupabaseSyncOk) throw new Error('A sincronização anterior não foi confirmada. A migração foi cancelada.');
+      },
       ensureSaved: id => {
         const w = windows.get(id);
         if (w && (w.dirty || !notes.some(n => n.id === id && !n.deletedAt))) return saveNote(w);

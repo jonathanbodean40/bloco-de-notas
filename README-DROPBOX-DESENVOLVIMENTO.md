@@ -1,70 +1,75 @@
-# Bloco de Notas Pro — integração Dropbox (protótipo isolado)
+# Bloco de Notas Pro — Dropbox (versão de desenvolvimento)
 
 Data: 23/10/2026
-Origem: revisão Git b984514, 16/10/2026.
-Pasta de desenvolvimento: C:\Users\ferna\Documents\BlocoNotasPro_Dropbox_Desenvolvimento_20261023
+Branch: desenvolvimento/dropbox-local-first
+Base do código publicado: b984514.
+Revisão local de desenvolvimento: 3b02cf6 (seguida de atualização documental).
 
-## Estado real
+## Estado da implementação
 
-Implementado APENAS na cópia de desenvolvimento:
-- Código de cliente Dropbox para listar pastas, criar pastas, ler notas e carregar ficheiros.
-- Backups individuais com formato JSON versionado, ID estável da nota, conteúdo rico, data de alteração e link de abertura no Bloco de Notas Pro.
-- Controlo de revisões Dropbox na escrita: não substitui silenciosamente alterações remotas.
-- OAuth 2.0 com PKCE, estado anti-CSRF, autenticação e renovação de token enquanto durar a sessão do navegador.
-- Diálogo de guardar nota por pasta, explorar/criar pastas, comparar cópia e copiar ligação direta.
-- Dentro do diálogo, ficheiros .keepnote.json presentes no Dropbox abrem com um clique a nota local correspondente já sincronizada (não descarregam nem substituem dados sem validação).
-- Depois de uma nota ter sido selecionada para backup, os novos cliques em Guardar podem agendar atualizações Dropbox em segundo plano enquanto a sessão estiver ligada.
-- A gravação local e sincronização original Supabase continuam como antes.
+**Implementado na cópia de desenvolvimento, não publicado:**
+- Modelo local-first: gravação no dispositivo antes de qualquer transferência para a nuvem.
+- Motor Dropbox com índice central de notas, ID estável, pasta associada e ficheiro JSON por nota.
+- Migração expressa para modo principal Dropbox, condicionada à sincronização Supabase e a ausência de conflitos.
+- Importação a partir do Dropbox quando a nota não existe no dispositivo, sem substituir dados locais.
+- Escrita condicional por revisão Dropbox (CAS) para impedir sobreposição silenciosa.
+- Identificação de alterações concorrentes e resolução manual: guardar a versão remota como nova nota antes de manter a versão local.
+- Eliminação lógica recuperável: mantém histórico e conteúdo do ficheiro.
+- Seleção de pastas Dropbox e navegação pelas notas dentro da aplicação.
+- Atualização em segundo plano após guardar, ao regressar ao separador e em verificações periódicas com a aplicação aberta.
+- OAuth 2.0 PKCE, state anti-CSRF e refresh token com persistência opcional cifrada no IndexedDB do navegador.
+- Opção para desligar Dropbox e apagar a autorização guardada nesse navegador.
+- Cópia adicional das notas no Supabase após sincronização Dropbox.
 
-Não implementado / não validado:
-- Ligação real a uma aplicação Dropbox autorizada, transferência de uma nota verdadeira e teste de OAuth no POCO F8 Ultra.
-- Dropbox como fonte principal de leitura para todos os dispositivos; no protótipo é uma cópia complementar e não substitui o Supabase.
-- Token de renovação armazenado em servidor seguro para sessões persistentes; atualmente, fica apenas no sessionStorage e não permanece após encerrar a sessão do navegador.
-- Resolução automática de conflitos simultâneos, importação/recuperação de versões divergentes e índice compartilhado de pastas entre dispositivos.
-- Garantia de abertura com um único toque de ficheiros na interface da aplicação Dropbox em Android.
-- Migração, alteração do projeto publicado e qualquer escrita em dados reais.
+**Não concluído / não demonstrado em ambiente real:**
+- Criação/associação de uma Dropbox API App do utilizador com App Key pública, scopes necessários e autorização OAuth.
+- Transferência, recuperação e sincronização de notas verdadeiras na conta Dropbox e no POCO F8 Ultra.
+- Abertura garantida com um único toque nos ficheiros .keepnote.json diretamente na aplicação Dropbox do Android/Windows: depende das associações do sistema operativo.
+- Benchmark real com notas grandes, imagens e eventuais limites de tamanho e quota.
+- Migração efetiva de dados reais, ativação Dropbox principal e publicação da aplicação.
 
-## Dependência de configuração
+## Verificação sem dados reais
 
-É necessário criar/autorizar uma aplicação no Dropbox App Console. A chave pública ("App key") pode ser introduzida no diálogo, mas NUNCA o App secret. Para escolher pastas arbitrárias, a aplicação precisa de acesso ao Dropbox completo com os scopes: files.content.read, files.content.write, files.metadata.read e files.metadata.write. Isto requer autorização expressa do titular da conta.
+20 testes Node passaram, incluindo controlo de revisões, migração sintética, falha de rede, conflitos e conservação de versões.
+10 cenários e 125 verificações de navegador Playwright passaram, com simulação da API Dropbox, ecrã móvel estreito e armazenamento cifrado.
+Estes testes NÃO confirmam compatibilidade real com uma conta Dropbox autorizada ou com o POCO F8 Ultra.
 
-A URI de redirecionamento de produção deverá ser exatamente:
+## Configuração Dropbox necessária
+
+Dropbox App Console: https://www.dropbox.com/developers/apps
+Tipo de app: Scoped access, Full Dropbox (para pastas arbitrárias).
+Permissões: files.content.read, files.content.write, files.metadata.read e files.metadata.write.
+OAuth Redirect URI exata de produção:
 https://jonathanbodean40.github.io/bloco-de-notas/
 
-Para testes locais, registar separadamente a URI HTTPS/localhost efetivamente utilizada. O protótipo não contém chaves privadas, nem tenta reutilizar as credenciais de outros conectores.
+A App Key é pública e pode ser inserida no diálogo da aplicação.
+**Nunca** fornecer App secret, refresh tokens ou credenciais de administrador.
+A autorização requer consentimento do utilizador no próprio Dropbox.
 
-## Limitações de abertura direta
+## Preservação e segurança
 
-O ficheiro .keepnote.json é um backup, não um atalho do sistema operativo. Contém um campo openUrl com uma ligação autenticada à nota, mas o Dropbox não vai necessariamente abri-la ao tocar no ficheiro. A interface do Dropbox e as associações de ficheiros no Android são controladas pelo Dropbox e pelo Android. Não apresentar ao utilizador a abertura com um toque como concluída. Para garantir fluidez, a solução final deverá navegar pelas pastas Dropbox DENTRO do Bloco de Notas Pro, abrir uma nota local já sincronizada e apenas descarregar da nuvem quando estiver em falta.
+- Não foi acedida nenhuma nota real, nem escritos ficheiros na conta Dropbox durante o desenvolvimento.
+- Não se alterou o repositório GitHub remoto nem o site publicado.
+- Foi criado backup independente do código anterior no MSI.
+- A proteção cifrada no navegador não é um cofre contra scripts maliciosos da mesma origem; para dados especialmente sensíveis, considerar um backend que guarde as credenciais.
+- O Supabase e o armazenamento local mantêm-se até validação clínica e funcional.
+- O Dropbox não substitui um backup fora da mesma conta; verificar retenção de versões e cópias offline.
 
-## Regras de segurança
+## Caminhos MSI
 
-- Nunca alterar nem apagar notas reais durante ensaios iniciais.
-- Criar cópia verificável do conteúdo e histórico antes da futura migração.
-- Não guardar qualquer App secret, token de administrador ou service_role em ficheiros públicos.
-- Não enviar conteúdo das notas a ferramentas de registo, testes ou ficheiros de evidência.
-- Não converter o Dropbox em fonte principal enquanto autenticação, backup, recuperação e conflitos não estiverem validados em Windows e Android.
-- Não considerar Dropbox a única cópia independente; verificar retenção de versões e eventual backup offline.
+Desenvolvimento:
+C:\Users\ferna\Documents\BlocoNotasPro_Dropbox_Desenvolvimento_20261023
 
-## Validação técnica
+Cópia pré-alterações:
+C:\Users\ferna\Documents\BlocoNotasPro_Backup_Codigo_AntesAlteracoes_20261023
 
-Executar na pasta do projeto:
-node --test tests\dropbox-storage.test.cjs tests\dropbox-oauth.test.cjs tests\private-access.test.cjs
-node --check app.js
-node --check dropbox-ui.js
-node --check dropbox-storage.js
-node --check dropbox-oauth.js
+## Testar
 
-O ensaio Playwright tests\startup-browser.cjs utiliza dados sintéticos e bloqueia acesso à Internet e aos dados verdadeiros.
-Foi utilizado PLAYWRIGHT_MODULE apontando à instalação Playwright já existente no MSI.
+node --test tests\dropbox-primary.test.cjs tests\dropbox-storage.test.cjs tests\dropbox-ui.test.cjs tests\dropbox-oauth.test.cjs tests\private-access.test.cjs
 
-## Passos seguintes
+node tests\startup-browser.cjs
+(Definir PLAYWRIGHT_MODULE apontando à instalação Playwright existente no MSI.)
 
-1. Completar a arquitetura de recuperação e mapeamento partilhado PC/POCO, com conflitos sem substituição.
-2. Validar uma aplicação Dropbox de teste com credenciais públicas e consentimento do utilizador.
-3. Confirmar o comportamento real da abertura nos dois sistemas, sobretudo Android.
-4. Desenvolver persistência segura do token fora do JavaScript público, se for exigida sincronização contínua.
-5. Testar offline, falha de rede, reentrada, edição simultânea e registos grandes.
-6. Só após esses testes considerar migração gradual de armazenamento e publicação.
+## Critério para lançamento
 
-NENHUMA alteração foi enviada ao repositório remoto ou à aplicação pública.
+Só publicar e ativar Dropbox como principal depois de autorização válida, cópia verificada das notas, testes com PC e POCO, recuperação e conflitos validados com notas fictícias e plano de reversão confirmado.

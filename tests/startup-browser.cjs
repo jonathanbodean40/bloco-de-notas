@@ -15,7 +15,7 @@ const outputDir = path.resolve(root, '..', 'verification');
 const baselineRef = process.env.BASELINE_REF || '144b247';
 const assetDelayMs = Number(process.env.APP_SCRIPT_DELAY_MS || 180);
 const publicFiles = ['index.html', 'style.css', 'private-access.js', 'app.js', 'spell-worker.js', 'icon.svg', 'manifest.webmanifest'];
-const additionalPublic = ['dropbox-storage.js', 'dropbox-oauth.js', 'dropbox-ui.js'];
+const additionalPublic = ['dropbox-storage.js', 'dropbox-token-vault.js', 'dropbox-oauth.js', 'dropbox-primary.js', 'dropbox-ui.js'];
 const sources = {current: {}, baseline: {}};
 for (const name of publicFiles) {
   sources.current[name] = fs.readFileSync(path.join(root, name));
@@ -211,7 +211,8 @@ async function restored(name, variant, verifyFeatures=false) {
   }));
   check(motion.every(s=>s.animationName==='none' && s.animationDuration==='0s' && s.transitionDuration==='0s'), `${name}: startup surfaces have no CSS animation/transition`);
   let features;
-  if(verifyFeatures) features=await verifyNoteFeatures(page);
+  if(verifyFeatures==='primary') features=await verifyPrimaryMode(page);
+  else if(verifyFeatures) features=await verifyNoteFeatures(page);
   const getStart=ready.events.find(e=>e.type==='getSession-start').at;
   const getEnd=ready.events.find(e=>e.type==='getSession-end').at;
   const rpcStart=ready.events.find(e=>e.type==='rpc-start').at;
@@ -276,6 +277,104 @@ async function verifyNoteFeatures(page) {
   return {orderBefore,orderAfter,savedOrder,renamedTitle:renamed.title,renamedContentUnchanged:true,typed,unsavedSyntheticEditingOnly:true};
 }
 
+async function verifyPrimaryMode(page) {
+  await page.evaluate(() => {
+    document.querySelector('#dropbox-key').value='synthetickey';
+    document.querySelector('#dropbox-folder').value='/Bloco de Notas Pro/Notas';
+    sessionStorage.setItem('notas-pro-dropbox-pkce-v1:synthetic-owner:synthetickey:tokens',
+      JSON.stringify({access_token:'synthetic-only',expires_at:Date.now()+3600000}));
+    const folders=new Set(['']),files=new Map();
+    let sequence=0;
+    window.__dropboxSynthetic={folders,files,changeRemote(id,content,when) {
+      const path=JSON.parse(files.get('/Bloco de Notas Pro/.keep-notes-index.json').body).entries[id].path;
+      const target=files.get(path),payload=JSON.parse(target.body);
+      payload.note.content=content;payload.note.updatedAt=when;
+      target.body=JSON.stringify(payload);target.rev='r'+(++sequence);
+      const manifest=files.get('/Bloco de Notas Pro/.keep-notes-index.json');
+      const index=JSON.parse(manifest.body);
+      index.entries[id].rev=target.rev;
+      index.entries[id].updatedAt=when;
+      manifest.body=JSON.stringify(index);manifest.rev='r'+(++sequence);
+    }};
+    const original=window.fetch;
+    window.fetch=async (url,options={})=>{
+      if(!String(url).includes('dropboxapi.com'))return original(url,options);
+      const endpoint=new URL(String(url)).pathname,missing=()=>new Response(
+        JSON.stringify({error_summary:'path/not_found/'}),{status:409});
+      const clash=()=>new Response(JSON.stringify({error_summary:'path/conflict/'}),{status:409});
+      const ok=value=>new Response(JSON.stringify(value),{status:200});
+      const data=options.body&&typeof options.body==='string'?JSON.parse(options.body):{};
+      if(endpoint.endsWith('/files/get_metadata')) {
+        const item=files.get(data.path);
+        if(item)return ok({'.tag':'file',rev:item.rev,path_display:data.path});
+        if(folders.has(data.path))return ok({'.tag':'folder',path_display:data.path});
+        return missing();
+      }
+      if(endpoint.endsWith('/files/create_folder_v2')) {
+        const path=data.path,parent=path.slice(0,path.lastIndexOf('/'));
+        if(folders.has(path)||!folders.has(parent))return clash();
+        folders.add(path);return ok({metadata:{'.tag':'folder',path_display:path}});
+      }
+      if(endpoint.endsWith('/files/list_folder'))return ok({entries:[],has_more:false});
+      const args=JSON.parse(options.headers?.['Dropbox-API-Arg']||'{}');
+      if(endpoint.endsWith('/files/download')) {
+        const item=files.get(args.path);
+        return item?new Response(item.body,{status:200}):missing();
+      }
+      if(endpoint.endsWith('/files/upload')) {
+        const path=args.path,parent=path.slice(0,path.lastIndexOf('/')),old=files.get(path);
+        const wanted=args.mode?.['.tag']==='update'?args.mode.update:null;
+        if(!folders.has(parent)||(!wanted&&old)||(wanted&&old?.rev!==wanted))return clash();
+        const body=new TextDecoder().decode(options.body);
+        const rev='r'+(++sequence);files.set(path,{body,rev});
+        return ok({rev,path_display:path});
+      }
+      throw Error('Endpoint de Dropbox inesperado: '+endpoint);
+    };
+  });
+  await page.locator('#dropbox-btn').click();
+  await page.locator('#dropbox-browse').click();
+  await page.waitForFunction(()=>document.querySelector('#dropbox-status').textContent.startsWith('Pasta:'));
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#dropbox-enable-primary').click();
+  await page.waitForFunction(()=>localStorage.getItem('notas-pro:dropbox-primary:v1:synthetic-owner')==='1',{timeout:15000});
+  const result=await page.evaluate(()=>{
+    const d=window.__dropboxSynthetic,files=[...d.files.keys()];
+    const index=JSON.parse(d.files.get('/Bloco de Notas Pro/.keep-notes-index.json').body);
+    const saved=JSON.parse(localStorage.getItem('notas-exclusivas-pro-v2:synthetic-owner'));
+    return {fileCount:files.length,indexed:Object.keys(index.entries).length,local:saved.length};
+  });
+  check(result.indexed===3,'dropbox-primary: all synthetic notes indexed before activation');
+  check(result.fileCount===4,'dropbox-primary: one file per note plus index');
+  check(result.local===3,'dropbox-primary: existing notes kept in local cache');
+  await page.evaluate(()=>window.__dropboxSynthetic.changeRemote(
+    'synthetic-note-b','<p>Atualização segura noutro dispositivo</p>','2026-10-24T12:00:00.000Z'));
+  await page.locator('#dropbox-sync-all').click();
+  await page.waitForFunction(()=>{
+    const data=JSON.parse(localStorage.getItem('notas-exclusivas-pro-v2:synthetic-owner'));
+    return data.some(n=>n.id==='synthetic-note-b'&&n.content.includes('Atualização segura'));
+  },{timeout:10000});
+  check(true,'dropbox-primary: remote revision pulled into local storage without page reload');
+  const tokenVault=await page.evaluate(async()=>{
+    const vault=window.NotasDropboxTokenVault;
+    const original='refresh-token-100-percent-sintetico';
+    await vault.remember('synthetic-owner','synthetickey',original);
+    const recovered=await vault.restore('synthetic-owner','synthetickey');
+    await vault.forget('synthetic-owner','synthetickey');
+    const removed=await vault.restore('synthetic-owner','synthetickey');
+    return {restored:recovered===original,removed:removed===null};
+  });
+  check(tokenVault.restored&&tokenVault.removed,'dropbox-primary: refresh token vault encrypts, restores and revokes in isolated browser');
+  await page.setViewportSize({width:393,height:852});
+  const mobile=await page.locator('#dropbox-dialog').evaluate(el=>{
+    const rect=el.getBoundingClientRect(),css=getComputedStyle(el);
+    return {width:rect.width,height:rect.height,overflowY:css.overflowY};
+  });
+  check(mobile.width<=393&&mobile.height<=852&&mobile.overflowY==='auto',
+    'dropbox-primary: settings dialog remains scrollable on narrow mobile viewport');
+  return {...result,tokenVault,mobile};
+}
+
 async function blockedCase(name, sessionMode, rpcResult) {
   const testCase=await openCase(name),{page}=testCase;
   await page.evaluate(mode=>window.__startupTest.releaseSession(mode),sessionMode);
@@ -301,6 +400,7 @@ let origin;
   browser=await chromium.launch({channel:'chrome',headless:true});
   evidence.environment.browserVersion=browser.version();
   await restored('current-valid-session','current',true);
+  await restored('current-dropbox-primary','current','primary');
   await blockedCase('no-session','none');
   await blockedCase('session-restore-error','error');
   await blockedCase('device-limit-denial','valid',{data:denied('device_limit'),error:null});

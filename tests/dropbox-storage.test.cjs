@@ -12,6 +12,16 @@ test('formato reversível e segregação de contas',()=>{
   assert.throws(()=>db.deserialize(data,'outro-utilizador'));
   assert.equal(JSON.parse(data).openUrl,base+'?note=synthetic-id&scope=synthetic-user');
 });
+test('importação remota valida proprietário, nome, ID e exclusão sem alterar a nota', () => {
+  const raw = db.serialize(note, owner, base);
+  const original = JSON.parse(raw);
+  assert.deepEqual(db.importableNote(raw, owner, db.noteFilename(note)), note);
+  assert.throws(() => db.importableNote(raw, 'conta-diferente', db.noteFilename(note)));
+  assert.throws(() => db.importableNote(raw, owner, 'Outra--outro-id.keepnote.json'));
+  assert.throws(() => db.importableNote(raw, owner, 'ficheiro.json'));
+  original.note.deletedAt = '2026-10-23T11:00:00Z';
+  assert.throws(() => db.importableNote(JSON.stringify(original), owner, db.noteFilename(note)));
+});
 test('pastas não aceitam percursos perigosos',()=>{
   assert.equal(db.folderPath('Keep/Planos'),'/Keep/Planos');
   assert.equal(db.folderPath('/'),'');

@@ -121,19 +121,31 @@
   <dialog id="dropbox-dialog" class="manager-dialog" aria-labelledby="dropbox-title">
     <div class="dialog-heading"><h2 id="dropbox-title">Guardar nota no Dropbox</h2><button type="button" id="dropbox-close" aria-label="Fechar Dropbox">✕</button></div>
     <p id="dropbox-selected-note">Escolha uma nota primeiro</p>
-    <p>Versão experimental. As notas continuam guardadas localmente e no Supabase; apenas as notas selecionadas são copiadas para o Dropbox.</p>
+    <p>Sem ativação, apenas as notas escolhidas são copiadas para o Dropbox. No modo principal, todas as notas guardadas são sincronizadas, mantendo cópia local e backup Supabase.</p>
     <label>Chave pública da aplicação Dropbox<input id="dropbox-key" type="text" autocomplete="off" spellcheck="false" placeholder="App key Dropbox"></label>
-    <div class="dialog-actions"><button type="button" id="dropbox-connect">Ligar Dropbox</button></div>
+    <div class="dialog-actions"><button type="button" id="dropbox-connect">Ligar Dropbox</button><button type="button" id="dropbox-disconnect">Desligar Dropbox</button></div>
+    <small>Depois de autorizar, a ligação pode ser lembrada neste dispositivo em armazenamento encriptado do navegador. «Desligar Dropbox» limpa essa autorização local; também pode revogar o acesso nas definições da conta Dropbox.</small>
     <label>Pasta do Dropbox<input id="dropbox-folder" type="text" placeholder="/Notas Pro" value="/Notas Pro"></label>
     <div class="dialog-actions"><button type="button" id="dropbox-browse">Explorar pastas</button><button type="button" id="dropbox-create-folder">Criar pasta</button></div>
     <div id="dropbox-folders" class="dropbox-folder-list"></div>
     <div class="dialog-actions"><button type="button" id="dropbox-save">Guardar cópia desta nota</button><button type="button" id="dropbox-recover">Comparar com cópia</button><button type="button" id="dropbox-copy-link">Copiar ligação direta</button></div>
     <p id="dropbox-status" role="status" aria-live="polite">Não ligado ao Dropbox.</p>
-    <small>A ligação direta requer sessão autorizada. A abertura imediata a partir de ficheiros no Android ainda necessita de validação.</small>
+    <section class="dropbox-primary-settings" aria-labelledby="dropbox-primary-title">
+      <h3 id="dropbox-primary-title">Armazenamento principal e cópias de segurança</h3>
+      <p>Modo local-first: a escrita continua imediata no dispositivo; o Dropbox recebe as notas em segundo plano, com histórico de revisões. O Supabase permanece como cópia adicional.</p>
+      <p id="dropbox-primary-status" role="status" aria-live="polite">Modo principal ainda não ativado.</p>
+      <div id="dropbox-conflicts" class="dropbox-conflict-list" aria-live="polite"></div>
+      <div class="dialog-actions">
+        <button type="button" id="dropbox-enable-primary">Ativar Dropbox como principal</button>
+        <button type="button" id="dropbox-sync-all">Sincronizar com Dropbox agora</button>
+      </div>
+      <small>Antes da ativação, todas as notas devem estar sincronizadas. Se houver versões divergentes, a migração é bloqueada sem apagar conteúdo. Após a ativação, o botão «Guardar cópia» permite escolher outra pasta, mantendo a versão anterior recuperável.</small>
+    </section>
+    <small>As pastas são navegáveis diretamente nesta aplicação. Abrir ficheiros .keepnote.json com um toque a partir da aplicação Dropbox depende do sistema operativo e não é garantido.</small>
   </dialog>
   <dialog id="link-dialog"><form id="link-form"><div class="dialog-heading"><h2>Adicionar ligação</h2><button id="cancel-link" type="button" aria-label="Cancelar ligação">✕</button></div><label>Endereço completo<input id="link-url" type="text" required placeholder="https://…"></label><label>Texto a mostrar (opcional)<input id="link-label" type="text" placeholder="Abrir página ou plano de tratamento"></label><p id="link-error" role="status"></p><div class="dialog-actions"><button type="submit">Adicionar ligação</button></div></form></dialog>
   </div>
-  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="dropbox-storage.js"></script><script src="dropbox-oauth.js"></script><script src="dropbox-ui.js"></script><script src="private-access.js"></script>
+  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="dropbox-storage.js"></script><script src="dropbox-token-vault.js"></script><script src="dropbox-oauth.js"></script><script src="dropbox-primary.js"></script><script src="dropbox-ui.js"></script><script src="private-access.js"></script>
 </body></html>
 
 

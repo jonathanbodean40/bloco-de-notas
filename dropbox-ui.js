@@ -3,8 +3,8 @@
  */
 (function (root) {
   'use strict';
-  function create({owner, getNote, ensureSaved, getActiveId, getCurrentOwner, openNote, currentUrl}) {
-    if (!root.NotasDropboxStorage || !root.NotasDropboxOAuth) throw new Error('Módulos Dropbox indisponíveis');
+  function create({owner, getNote, getNotes, importNote, applyRemote, ensureSaved, prepareActivation, requestSync, getActiveId, getCurrentOwner, openNote, currentUrl}) {
+    if (!root.NotasDropboxStorage || !root.NotasDropboxOAuth || !root.NotasDropboxPrimary) throw new Error('Módulos Dropbox indisponíveis');
     const db = root.NotasDropboxStorage;
     const Auth = root.NotasDropboxOAuth.DropboxOAuth;
     const $ = id => document.getElementById(id);
@@ -44,6 +44,85 @@
       const auth = makeAuth();
       if (!auth.connected()) throw new Error('É necessário ligar o Dropbox nesta sessão');
       return new db.Client({getToken:() => auth.getToken()});
+    }
+    const primary = new root.NotasDropboxPrimary.Primary({
+      owner, client, getNotes,
+      importNote, applyRemote, storage:localStorage
+    });
+    const modeStatus = $('dropbox-primary-status');
+    const conflictList = $('dropbox-conflicts');
+    function renderConflicts(conflicts) {
+      conflictList.replaceChildren();
+      if (!Array.isArray(conflicts)) return;
+      for (const conflict of conflicts) {
+        const title = getNotes().find(n => n.id === conflict.id)?.title || 'Sem título';
+        const row = document.createElement('div');
+        const label = document.createElement('p');
+        label.textContent = 'Conflito na nota «' + title + '»: ' + conflict.message;
+        const action = document.createElement('button');
+        action.type = 'button';
+        action.textContent = 'Preservar ambas as versões e usar esta edição';
+        action.addEventListener('click', async () => {
+          if (!root.confirm('Guardar a versão existente no Dropbox como uma nova nota e manter a edição deste dispositivo na nota original? Nenhuma das duas será apagada.')) return;
+          action.disabled = true;
+          try {
+            const resolved = await primary.resolveWithLocal(conflict.id);
+            row.remove();
+            say('Conflito resolvido; versão da nuvem preservada como nota ' + resolved.backupId);
+            requestSync?.();
+          } catch(err) {
+            action.disabled = false;
+            say('Não foi possível resolver: ' + (err.message || 'versão alterada'));
+          }
+        });
+        row.append(label,action); conflictList.append(row);
+      }
+    }
+    function updateMode(message) {
+      const active = primary.enabled();
+      modeStatus.textContent = message || (active
+        ? 'Dropbox principal ativo neste dispositivo. As notas são gravadas localmente e sincronizadas na nuvem.'
+        : 'Armazenamento principal atual preservado. O Dropbox ainda é opcional.');
+      $('dropbox-enable-primary').disabled = active;
+      $('dropbox-sync-all').disabled = !active;
+    }
+    updateMode();
+    async function syncPrimary() {
+      if (!primary.enabled()) return null;
+      if (getCurrentOwner() !== owner || !root.NOTAS_PRIVATE?.authorized) {
+        throw new Error('Conta não autorizada para sincronizar');
+      }
+      if (!oauth?.connected()) {
+        throw new Error('Dropbox principal pendente: ligue novamente a sua conta Dropbox');
+      }
+      const result = await primary.reconcile();
+      renderConflicts(result.conflicts);
+      if (result.conflicts.length) {
+        updateMode(result.conflicts.length + ' conflito(s) entre dispositivos. Nenhuma alteração divergente foi substituída.');
+      } else {
+        updateMode('Dropbox sincronizado: ' + result.pushed + ' enviadas, ' + result.pulled + ' recuperadas.');
+      }
+      return result;
+    }
+    async function enablePrimary() {
+      if (!oauth?.connected()) throw new Error('Ligue primeiro a sua conta Dropbox');
+      if (getCurrentOwner() !== owner || !root.NOTAS_PRIVATE?.authorized) throw new Error('Conta não autorizada');
+      if (typeof prepareActivation !== 'function') throw new Error('Verificação prévia indisponível');
+      updateMode('A verificar cópias de segurança e a sincronização atual…');
+      await prepareActivation();
+      if (!root.confirm('Migrar cópias de todas as notas para o Dropbox como armazenamento principal? A versão atual e o Supabase serão preservados como backup, sem eliminar notas.')) {
+        updateMode();return;
+      }
+      updateMode('A copiar as notas para o Dropbox. Não feche a aplicação durante a primeira transferência.');
+      const preview = await primary.reconcile();
+      if (preview.conflicts.length) {
+        renderConflicts(preview.conflicts);
+        updateMode('Existem conflitos que precisam de revisão antes da ativação. Ambas as versões foram preservadas.');
+        return;
+      }
+      const result = await primary.enable();
+      updateMode('Dropbox principal ativado com ' + result.pushed + ' nota(s) enviadas. Nenhuma nota local foi apagada.');
+      requestSync?.();
     }
     function safeFolder() {
       const path = db.folderPath(folderInput.value.trim());
@@ -88,6 +167,7 @@
       }
     }
     function queue(id) {
+      if (primary.enabled()) { requestSync?.(); return; }
       if (getCurrentOwner() !== owner || !readMap()[id]) return;
       if (pending.has(id)) clearTimeout(pending.get(id));
       if (!oauth?.connected()) return;
@@ -100,6 +180,7 @@
       pending.set(id, timer);
     }
     function retryMapped() {
+      if (primary.enabled()) { if(oauth?.connected())requestSync?.(); return; }
       if (!oauth?.connected() || getCurrentOwner() !== owner) return;
       for (const [id, mapping] of Object.entries(readMap())) {
         const note = getNote(id);
@@ -111,8 +192,9 @@
       selectedId = id || null;
       const note = id && getNote(id);
       $('dropbox-selected-note').textContent = note ? 'Nota: ' + (note.title || 'Sem título') : 'Escolha uma nota primeiro';
-      const map = id && readMap()[id];
+      const map = id && (primary.enabled() ? primary.readMap()[id] : readMap()[id]);
       if (map?.folder) folderInput.value = map.folder;
+      else if (map?.path) folderInput.value = map.path.slice(0, map.path.lastIndexOf('/'));
       say(oauth?.connected() ? 'Dropbox ligado nesta sessão' : 'Dropbox não ligado');
       box.showModal();
     }
@@ -125,8 +207,25 @@
       // Explicit user action. No silent login or hidden Dropbox permission.
       root.location.assign(authorizeUrl);
     }
+    function disconnect() {
+      oauth?.disconnect();
+      for (const timer of pending.values()) clearTimeout(timer);
+      pending.clear();waiting.clear();
+      say('Dropbox desligado. As notas permanecem guardadas neste dispositivo; a sincronização Dropbox está suspensa.');
+      updateMode();
+    }
     async function resume() {
-      if (!new URLSearchParams(root.location.search).has('code')) return false;
+      if (!new URLSearchParams(root.location.search).has('code')) {
+        if (!keyInput.value.trim()) return false;
+        const auth = makeAuth();
+        const restored = await auth.restorePersistent();
+        if (restored) {
+          say('Dropbox ligado neste dispositivo');
+          retryMapped();
+          requestSync?.();
+        }
+        return false;
+      }
       const auth = makeAuth();
       const destination = await auth.finish();
       if (destination) {
@@ -159,18 +258,57 @@
         });
         list.append(button);
       }
+      const localIdByPath = new Map(Object.entries(readMap()).filter(([, item]) => item?.path)
+        .map(([id, item]) => [String(item.path).toLocaleLowerCase(), id]));
       for (const entry of items.filter(item => item['.tag'] === 'file' && /\.keepnote\.json$/i.test(item.name))) {
         const match = /--([a-zA-Z0-9_-]+)\.keepnote\.json$/i.exec(entry.name);
         if (!match) continue;
-        const note = getNote(match[1]);
+        const note = getNote(localIdByPath.get(String(entry.path_display || '').toLocaleLowerCase()) || match[1]);
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = (note ? 'Abrir nota: ' : 'Nota remota: ') + entry.name.replace(/--[a-zA-Z0-9_-]+\.keepnote\.json$/i, '');
         if (note) {
           button.addEventListener('click', () => { close(); openNote(note.id); });
         } else {
-          button.disabled = true;
-          button.title = 'Esta nota ainda não existe no dispositivo; é necessário importar ou sincronizar primeiro';
+          button.textContent = 'Importar nota: ' + entry.name.replace(/--[a-zA-Z0-9_-]+\.keepnote\.json$/i, '');
+          button.title = 'Importa sem substituir nenhuma nota existente; depois poderá abri-la';
+          let imported = false;
+          button.addEventListener('click', async () => {
+            if (imported) return;
+            if (getCurrentOwner() !== owner || !root.NOTAS_PRIVATE?.authorized) {
+              say('A conta autorizada foi alterada; inicie novamente a sessão');
+              return;
+            }
+            button.disabled = true;
+            try {
+              if (typeof importNote !== 'function') throw new Error('Importação indisponível nesta versão');
+              if (!entry.rev || !entry.path_display) throw new Error('Metadados Dropbox incompletos');
+              const remote = db.importableNote(await client().download(entry.path_display), owner, entry.name);
+              if (getCurrentOwner() !== owner || !root.NOTAS_PRIVATE?.authorized) {
+                throw new Error('A sessão mudou durante a transferência; nenhuma nota foi importada');
+              }
+              importNote(remote);
+              imported = true;
+              const mapping = readMap();
+              mapping[remote.id] = {
+                path: entry.path_display,
+                folder: folder,
+                rev: entry.rev,
+                syncedAt: remote.updatedAt,
+                updated: new Date().toISOString()
+              };
+              try { saveMap(mapping); }
+              catch (_) { say('Nota importada, mas não foi possível memorizar a pasta Dropbox.'); }
+              button.textContent = 'Abrir nota: ' + (remote.title || 'Sem título');
+              button.addEventListener('click', () => { close(); openNote(remote.id); });
+              say('Nota importada sem substituir dados. Clique em «Abrir nota» para a visualizar.');
+            } catch (err) {
+              button.disabled = false;
+              say(err?.message || 'Não foi possível importar a nota');
+            } finally {
+              if (imported) button.disabled = false;
+            }
+          });
         }
         list.append(button);
       }
@@ -185,13 +323,20 @@
       const id = selectedId;
       if (!id) throw new Error('Abra primeiro uma nota');
       if (!ensureSaved(id)) throw new Error('Guarde a nota antes de enviar ao Dropbox');
-      currentNote();
+      const note = currentNote();
       localStorage.setItem(folderKey, folderInput.value.trim());
-      await backup(id, true);
+      if (primary.enabled()) {
+        if (!oauth?.connected()) throw new Error('Ligue primeiro o Dropbox');
+        const moved = await primary.placeInFolder(note,safeFolder());
+        say('Nota guardada em ' + moved.path + (moved.oldPath
+          ? '. A cópia anterior permanece em ' + moved.oldPath + ' para recuperação.'
+          : ''));
+        requestSync?.();
+      } else await backup(id, true);
     }
     async function recoverSelected() {
       const note = currentNote();
-      const map = readMap()[note.id];
+      const map = primary.enabled() ? primary.readMap()[note.id] : readMap()[note.id];
       if (!map) throw new Error('Esta nota ainda não tem um ficheiro Dropbox associado');
       const data = db.deserialize(await client().download(map.path), owner);
       const result = db.revisionDecision(note, data, map.rev);
@@ -208,11 +353,14 @@
     $('dropbox-close').addEventListener('click', close);
     const events = [
       ['dropbox-connect',connect],
+      ['dropbox-disconnect',disconnect],
       ['dropbox-browse',listFolders],
       ['dropbox-create-folder',createFolder],
       ['dropbox-save',saveSelected],
       ['dropbox-recover',recoverSelected],
-      ['dropbox-copy-link',copyLink]
+      ['dropbox-copy-link',copyLink],
+      ['dropbox-enable-primary',enablePrimary],
+      ['dropbox-sync-all',syncPrimary]
     ];
     for (const [id, action] of events) $(id).addEventListener('click', () => {
       Promise.resolve().then(action).catch(err => say(err.status === 409
@@ -220,8 +368,28 @@
         : err.message || 'Falha na operação'));
     });
     root.addEventListener('online', retryMapped);
+    let lastForegroundSync=0;
+    function refreshOnReturn() {
+      if (!primary.enabled() || !oauth?.connected() || getCurrentOwner()!==owner ||
+          !root.NOTAS_PRIVATE?.authorized || document.visibilityState!=='visible') return;
+      if (Date.now()-lastForegroundSync<15000) return;
+      lastForegroundSync=Date.now();
+      requestSync?.();
+    }
+    if (root.document?.defaultView===root) {
+      root.addEventListener('focus',refreshOnReturn);
+      document.addEventListener('visibilitychange',refreshOnReturn);
+      root.setInterval(refreshOnReturn,60000);
+    }
+    root.addEventListener('notas:private-locked', () => {
+      oauth?.disconnect();
+      for (const timer of pending.values()) clearTimeout(timer);
+      pending.clear();
+      waiting.clear();
+    });
     if (oauth?.connected()) setTimeout(retryMapped, 0);
-    return Object.freeze({open, queue, resume, retryMapped, connected:() => !!oauth?.connected()});
+    return Object.freeze({open, queue, resume, retryMapped, syncPrimary,
+      primaryEnabled:()=>primary.enabled(),connected:() => !!oauth?.connected()});
   }
   const API = Object.freeze({create});
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
