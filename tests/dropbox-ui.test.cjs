@@ -11,12 +11,12 @@ function widget() {
     children:[], listeners:{}, value:'', textContent:'', disabled:false,
     addEventListener(type,fn){(this.listeners[type] ||= []).push(fn);},
     async click(){for(const fn of [...(this.listeners.click || [])]) await fn();},
-    append(item){this.children.push(item);},
+    append(...items){this.children.push(...items);},
     replaceChildren(){this.children=[];},
     showModal(){this.open=true;},close(){this.open=false;}
   };
 }
-function harness(entry=file,body=raw) {
+function harness(entry=file,body=raw,primaryOverride=null) {
   const elems = new Map(), store = new Map();
   const element = name => {
     if(!elems.has(name)) elems.set(name,widget());
@@ -34,7 +34,7 @@ function harness(entry=file,body=raw) {
   globalThis.NOTAS_PRIVATE={authorized:true};
   globalThis.addEventListener=()=>{};
   globalThis.NotasDropboxStorage=db;
-  globalThis.NotasDropboxPrimary=require('../dropbox-primary.js');
+  globalThis.NotasDropboxPrimary=primaryOverride||require('../dropbox-primary.js');
   globalThis.NotasDropboxOAuth={DropboxOAuth:class {
     constructor({appKey}){this.appKey=appKey;}
     connected(){return true;}
@@ -48,7 +48,7 @@ function harness(entry=file,body=raw) {
     throw Error('A rede de teste foi bloqueada: '+url);
   };
   const ui=require('../dropbox-ui.js');
-  ui.create({
+  const instance=ui.create({
     owner,getNote:id=>imported.find(n=>n.id===id),
     getNotes:()=>imported,
     applyRemote:()=>false,prepareActivation:async()=>true,requestSync:()=>{},
@@ -60,7 +60,7 @@ function harness(entry=file,body=raw) {
     ensureSaved:()=>true,openNote:id=>opened.push(id),
     currentUrl:'https://example.invalid/bloco/'
   });
-  return {element,store,imported,opened};
+  return {element,store,imported,opened,instance};
 }
 test('uma nota só no Dropbox é importada sem substituição e abre no segundo clique',async()=>{
   const h=harness();
@@ -89,4 +89,33 @@ test('rejeita conteúdo Dropbox com identificador não correspondente ao nome',a
   assert.equal(h.imported.length,0);
   assert.equal(b.disabled,false);
   assert.match(h.element('dropbox-status').textContent,/incompatível/);
+});
+
+test('comparação de conflito mostra ambas as versões sem substituir notas',async()=>{
+  const local={...note,title:'',content:'<p>Esta edição local</p>'};
+  const remote={...note,title:'',content:'<div><img src="invalid" onerror="steal()"><p>Versão no Dropbox</p></div>'};
+  const stub={Primary:class {
+    enabled(){return true;}
+    async reconcile(){return {conflicts:[{id:note.id,message:'Alterações diferentes em dois dispositivos; requer revisão'}]};}
+    async inspectConflict(id){assert.equal(id,note.id);return {local,remote};}
+  }};
+  const h=harness(file,raw,stub);
+  h.imported.push(local);
+  await h.instance.syncPrimary();
+  const rows=h.element('dropbox-conflicts').children;
+  assert.equal(rows.length,1);
+  const [label,inspect,preview,action]=rows[0].children;
+  assert.match(label.textContent,/Sem título/);
+  assert.match(label.textContent,/the|synthetic-id|etic-id/i);
+  assert.equal(preview.hidden,true);
+  await inspect.click();
+  assert.equal(preview.hidden,false);
+  assert.equal(preview.children.length,3);
+  assert.match(preview.children[0].textContent,/Prévia textual resumida/);
+  assert.match(preview.children[1].children[2].textContent,/Esta edição local/);
+  assert.match(preview.children[2].children[2].textContent,/Versão no Dropbox/);
+  assert.doesNotMatch(preview.children[2].children[2].textContent,/onerror/);
+  assert.equal(action.textContent,'Preservar ambas as versões e usar esta edição');
+  assert.equal(h.imported.length,1);
+  assert.equal(h.imported[0].content,local.content);
 });

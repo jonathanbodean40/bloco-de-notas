@@ -180,4 +180,9 @@ body.note-options-open #custom-context-menu{position:fixed;left:auto!important;r
 .dropbox-primary-settings p{font-size:13px;line-height:1.5}
 .dropbox-conflict-list>div{background:#fff8e7;border:1px solid #dec58a;border-radius:9px;padding:10px;margin:8px 0}
 .dropbox-conflict-list button{width:100%;max-width:100%;white-space:normal}
+.dropbox-conflict-comparison{display:grid;gap:10px;margin:12px 0}
+.dropbox-conflict-comparison[hidden]{display:none}
+.dropbox-conflict-comparison section{background:#fff;border:1px solid #d6dfe8;border-radius:8px;padding:10px;min-width:0}
+.dropbox-conflict-comparison pre{font:12px/1.5 system-ui,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;margin:6px 0}
+.dropbox-conflict-comparison p{font-size:12px;overflow-wrap:anywhere}
 .window-bar [data-window="dropbox"]{font-size:22px}

@@ -242,21 +242,45 @@
       // Retain the previous copy as a recoverable historical file, never delete it silently.
       return {path,oldPath:old.path};
     }
-    async resolveWithLocal(id) {
+    async inspectConflict(id) {
       const {index}=await this.readIndex(false);
       const entry=index?.entries?.[id];
       const local=this.getNotes().find(n=>n.id===id);
       if(!entry||!local)throw new Error('A nota em conflito já não está disponível');
       const remote=await this.readNote(entry,id);
+      return {
+        local, remote,
+        localHash:await fingerprint(local),
+        remoteHash:await fingerprint(remote),
+        remoteRevision:entry.rev
+      };
+    }
+    async resolveWithLocal(id) {
+      const compared=await this.inspectConflict(id);
+      if(compared.localHash===compared.remoteHash) {
+        throw new Error('As versões já são iguais. Sincronize novamente em vez de criar duplicados.');
+      }
       const backup={
-        ...remote,
+        ...compared.remote,
         id:root.crypto.randomUUID(),
-        title:'Cópia da versão Dropbox - '+(remote.title||'Sem título'),
+        title:'Cópia da versão Dropbox - '+(compared.remote.title||'Sem título'),
         updatedAt:new Date().toISOString(),
         deletedAt:null
       };
-      if(!this.importNote(backup)) throw new Error('Não foi possível preservar a versão anterior da nuvem');
-      await this.upload(local,entry,DEFAULT_FOLDER,this.readMap());
+      if(!this.importNote(backup)) throw new Error('Não foi possível guardar localmente a cópia da nuvem');
+      // Store a separately indexed Dropbox copy BEFORE replacing the existing version.
+      // An interrupted upload must not destroy the only remote copy.
+      await this.upload(backup,null,DEFAULT_FOLDER,this.readMap());
+      const savedNow=this.getNotes().find(n=>n.id===id);
+      if(!savedNow || await fingerprint(savedNow)!==compared.localHash) {
+        throw conflict('A nota local mudou durante a comparação. A versão remota foi preservada, mas a nota original não foi substituída.');
+      }
+      const latestIndex=await this.readIndex(false);
+      const entry=latestIndex.index?.entries?.[id];
+      if(!entry || entry.rev!==compared.remoteRevision) {
+        throw conflict('A versão Dropbox mudou durante a operação. A cópia de segurança foi preservada.');
+      }
+      await this.upload(savedNow,entry,DEFAULT_FOLDER,this.readMap());
       return {backupId:backup.id,noteId:id};
     }
     async enable() {

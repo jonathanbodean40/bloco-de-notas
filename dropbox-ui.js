@@ -58,12 +58,59 @@
         const title = getNotes().find(n => n.id === conflict.id)?.title || 'Sem título';
         const row = document.createElement('div');
         const label = document.createElement('p');
-        label.textContent = 'Conflito na nota «' + title + '»: ' + conflict.message;
+        label.textContent = 'Conflito na nota «' + title + '» (ID …' +
+          String(conflict.id).slice(-8) + '): ' + conflict.message;
+        const inspect = document.createElement('button');
+        inspect.type = 'button';
+        inspect.textContent = 'Comparar as duas versões';
+        const preview = document.createElement('div');
+        preview.hidden = true;
+        preview.className = 'dropbox-conflict-comparison';
+        inspect.addEventListener('click', async () => {
+          inspect.disabled=true;
+          try {
+            if (getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)
+              throw new Error('A sessão da conta foi alterada');
+            const versions=await primary.inspectConflict(conflict.id);
+            preview.replaceChildren();
+            const info=document.createElement('p');
+            info.textContent='Prévia textual resumida; imagens e elementos gráficos podem não aparecer.';
+            preview.append(info);
+            const plainText = note => String(note?.content||'')
+              .replace(/<[^>]*>/g,' ')
+              .replace(/&nbsp;/g,' ')
+              .replace(/&amp;/g,'&')
+              .replace(/&lt;/g,'<')
+              .replace(/&gt;/g,'>')
+              .replace(/\s+/g,' ').trim().slice(0,1400);
+            for (const [caption,note] of [
+              ['Edição guardada neste MSI',versions.local],
+              ['Versão existente no Dropbox',versions.remote]
+            ]) {
+              const wrapper=document.createElement('section');
+              const h=document.createElement('strong');
+              h.textContent=caption;
+              const date=document.createElement('p');
+              date.textContent='Data registada: '+(note.updatedAt||'desconhecida') +
+                ' · ' + String(note.content||'').length + ' caracteres de conteúdo';
+              const body=document.createElement('pre');
+              body.textContent=plainText(note) || '[Conteúdo sem texto simples ou apenas elementos gráficos]';
+              wrapper.append(h,date,body);preview.append(wrapper);
+            }
+            preview.hidden=false;
+            inspect.textContent='Atualizar comparação';
+          } catch(err) {
+            say('Não foi possível comparar as versões: '+(err.message||'erro'));
+          } finally { inspect.disabled=false; }
+        });
         const action = document.createElement('button');
         action.type = 'button';
         action.textContent = 'Preservar ambas as versões e usar esta edição';
         action.addEventListener('click', async () => {
-          if (!root.confirm('Guardar a versão existente no Dropbox como uma nova nota e manter a edição deste dispositivo na nota original? Nenhuma das duas será apagada.')) return;
+          if (getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized) {
+            say('A sessão foi alterada; entre novamente antes de resolver o conflito.');return;
+          }
+          if (!root.confirm('Guardar PRIMEIRO uma cópia separada da versão Dropbox e só DEPOIS manter a edição do MSI na nota original? Ambas as versões ficarão guardadas na nuvem e no dispositivo.')) return;
           action.disabled = true;
           try {
             const resolved = await primary.resolveWithLocal(conflict.id);
@@ -75,7 +122,7 @@
             say('Não foi possível resolver: ' + (err.message || 'versão alterada'));
           }
         });
-        row.append(label,action); conflictList.append(row);
+        row.append(label,inspect,preview,action); conflictList.append(row);
       }
     }
     function updateMode(message) {

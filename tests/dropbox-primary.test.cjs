@@ -124,6 +124,11 @@ test('resolução explícita conserva as duas versões concorrentes sem apagar d
   await a.engine.reconcile();
   assert.equal((await b.engine.reconcile()).conflicts.length,1);
   b.engine.setEnabled(true);
+  const beforeIndex=cloud.files.get(INDEX).body;
+  const compared=await b.engine.inspectConflict('f');
+  assert.equal(compared.local.content,'Versão POCO');
+  assert.equal(compared.remote.content,'Versão PC');
+  assert.equal(cloud.files.get(INDEX).body,beforeIndex,'Comparação não altera o índice');
   const resolution=await b.engine.resolveWithLocal('f');
   assert.ok(resolution.backupId);
   assert.equal(b.items.find(n=>n.id===resolution.backupId).content,'Versão PC');
@@ -131,6 +136,49 @@ test('resolução explícita conserva as duas versões concorrentes sem apagar d
   const index=JSON.parse(cloud.files.get(INDEX).body);
   assert.equal(db.deserialize(cloud.files.get(index.entries.f.path).body,owner).content,'Versão POCO');
   assert.equal(db.deserialize(cloud.files.get(index.entries[resolution.backupId].path).body,owner).content,'Versão PC');
+});
+test('a versão antiga já está indexada como backup antes da substituição da nota principal',async()=>{
+  const cloud=new FakeDropbox(),a=device(cloud,[basic('s','Inicial')]);
+  await a.engine.enable();
+  const b=device(cloud);
+  await b.engine.reconcile();
+  a.items[0].content='Versão remota';a.items[0].updatedAt='2026-10-23T11:00:00.000Z';
+  b.items[0].content='Versão local';b.items[0].updatedAt='2026-10-23T11:01:00.000Z';
+  await a.engine.reconcile();
+  const originalUpload=cloud.upload.bind(cloud);
+  let backupWasIndexedAtOverwrite=false;
+  cloud.upload=async(path,body,revision)=>{
+    if(revision && path.endsWith('.keepnote.json')) {
+      const entries=JSON.parse(cloud.files.get(INDEX).body).entries;
+      backupWasIndexedAtOverwrite=Object.entries(entries).some(([key,entry])=>
+        key!=='s' && db.deserialize(cloud.files.get(entry.path).body,owner).content==='Versão remota');
+    }
+    return originalUpload(path,body,revision);
+  };
+  await b.engine.resolveWithLocal('s');
+  assert.equal(backupWasIndexedAtOverwrite,true);
+});
+test('falha ao guardar a cópia remota não permite substituir o conteúdo original',async()=>{
+  const cloud=new FakeDropbox(),a=device(cloud,[basic('r','Original')]);
+  await a.engine.enable();
+  const b=device(cloud);
+  await b.engine.reconcile();
+  a.items[0].content='Remoto';a.items[0].updatedAt='2026-10-23T11:00:00.000Z';
+  b.items[0].content='Local';b.items[0].updatedAt='2026-10-23T11:01:00.000Z';
+  await a.engine.reconcile();
+  const previousIndex=JSON.parse(cloud.files.get(INDEX).body);
+  const originalUpload=cloud.upload.bind(cloud);
+  cloud.upload=async(path,body,revision)=>{
+    if(path.endsWith('.keepnote.json') && !revision)
+      throw cloud.error(503,'Falha simulada ao preservar a cópia');
+    return originalUpload(path,body,revision);
+  };
+  await assert.rejects(()=>b.engine.resolveWithLocal('r'),/Falha simulada/);
+  const entry=previousIndex.entries.r;
+  assert.equal(db.deserialize(cloud.files.get(entry.path).body,owner).content,'Remoto');
+  assert.equal(cloud.files.get(entry.path).rev,entry.rev);
+  assert.equal(b.items.find(n=>n.id==='r').content,'Local');
+  assert.ok(b.items.some(n=>n.id!=='r' && n.content==='Remoto'),'Cópia local de recuperação mantida');
 });
 test('falha de Internet não elimina alterações locais nem liga modo primário',async()=>{
   const cloud=new FakeDropbox(),a=device(cloud,[basic('d','offline')]);
