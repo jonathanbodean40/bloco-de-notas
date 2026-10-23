@@ -15,11 +15,13 @@ const outputDir = path.resolve(root, '..', 'verification');
 const baselineRef = process.env.BASELINE_REF || '144b247';
 const assetDelayMs = Number(process.env.APP_SCRIPT_DELAY_MS || 180);
 const publicFiles = ['index.html', 'style.css', 'private-access.js', 'app.js', 'spell-worker.js', 'icon.svg', 'manifest.webmanifest'];
+const additionalPublic = ['dropbox-storage.js', 'dropbox-oauth.js', 'dropbox-ui.js'];
 const sources = {current: {}, baseline: {}};
 for (const name of publicFiles) {
   sources.current[name] = fs.readFileSync(path.join(root, name));
   sources.baseline[name] = execFileSync('git', ['show', `${baselineRef}:${name}`], {cwd: root, maxBuffer: 12 * 1024 * 1024});
 }
+for(const name of additionalPublic) sources.current[name] = fs.readFileSync(path.join(root, name));
 const sha256 = data => crypto.createHash('sha256').update(data).digest('hex');
 const notes = [
   {id: 'synthetic-note-a', title: 'nota alpha', titleHtml: '', content: '<p>conteúdo sintético alpha</p>', updatedAt: '2026-10-01T12:03:00.000Z', deletedAt: null},
@@ -115,7 +117,7 @@ async function staticReply(requestUrl, transport) {
   let body;
   if (name === 'vendor/supabase-js-v2.js') body = Buffer.from(mockVendor);
   else if (name === 'config.js') body = Buffer.from("window.NOTAS_CONFIG={supabaseUrl:'https://synthetic.supabase.co',supabasePublishableKey:'sb_publishable_synthetic_test_only'};");
-  else if (publicFiles.includes(name)) body = sources[version][name];
+  else if (publicFiles.includes(name) || additionalPublic.includes(name)) body = sources[version][name];
   else return {status:404,body:Buffer.from('Test server serves public static assets only'),headers:{'Cache-Control':'no-store'}};
   if (name === 'app.js' && variant.endsWith('-delayed')) await new Promise(resolve => setTimeout(resolve, assetDelayMs));
   record.respondedAt = Date.now();
@@ -249,6 +251,28 @@ async function verifyNoteFeatures(page) {
   await editor.pressSequentially('texto simples com palavras pequenas');
   const typed=await editor.innerText();
   check(typed==='Texto simples com palavras pequenas','features: real keyboard input capitalizes first sentence letter without capitalizing each word');
+  await page.locator('[data-window="dropbox"]').first().click();
+  check(await page.locator('#dropbox-dialog').evaluate(el=>el.open),'features: botão Dropbox abre caixa de diálogo sem ligação à nuvem');
+  check((await page.locator('#dropbox-selected-note').innerText()).includes('Nota:'),'features: ligação Dropbox identifica nota ativa');
+  await page.locator('#dropbox-close').click();
+  check(!(await page.locator('#dropbox-dialog').evaluate(el=>el.open)),'features: diálogo Dropbox fecha sem alterar notas');
+  await page.evaluate(() => {
+    document.querySelector('#dropbox-key').value = 'synthetickey';
+    sessionStorage.setItem('notas-pro-dropbox-pkce-v1:synthetic-owner:synthetickey:tokens', JSON.stringify({access_token:'synthetic-only',expires_at:Date.now()+3600000}));
+    const original = window.fetch;
+    window.fetch = (url, options) => {
+      if (String(url).endsWith('/files/list_folder')) {
+        return Promise.resolve(new Response(JSON.stringify({entries:[{'.tag':'file',name:'Alpha--synthetic-note-a.keepnote.json'}],has_more:false}),{status:200}));
+      }
+      return original(url, options);
+    };
+    window.open = url => {window.__syntheticDropboxOpened=url;return {closed:false,focus(){}};};
+  });
+  await page.locator('#dropbox-btn').click();
+  await page.locator('#dropbox-browse').click();
+  await page.getByText('Abrir nota: Alpha').click();
+  const opened=await page.evaluate(()=>window.__syntheticDropboxOpened);
+  check(new URL(opened).searchParams.get('note')==='synthetic-note-a','features: clicar nota na pasta Dropbox abre nota local com ID estável');
   return {orderBefore,orderAfter,savedOrder,renamedTitle:renamed.title,renamedContentUnchanged:true,typed,unsavedSyntheticEditingOnly:true};
 }
 

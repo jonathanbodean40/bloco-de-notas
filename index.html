@@ -45,6 +45,7 @@
   </header>
   <footer id="app-footer" aria-label="Conta e sincronização">
     <button id="account-btn">Conta</button>
+    <button id="dropbox-btn" type="button" title="Dropbox">Dropbox</button>
     <button id="sync-icon-btn" aria-label="Sincronizar" title="Sincronizar">⟳</button>
     <span id="save-status" role="status" aria-live="polite"></span>
   </footer>
@@ -117,9 +118,22 @@
     <div class="dialog-actions"><button type="submit">Guardar caso</button></div>
   </form></dialog>
   <dialog id="trash-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Notas excluídas</h2><button data-close="trash-dialog" aria-label="Fechar notas excluídas">✕</button></div><p>Restaurar recupera a última versão guardada.</p><div id="trash-list" class="records-list"></div></dialog>
+  <dialog id="dropbox-dialog" class="manager-dialog" aria-labelledby="dropbox-title">
+    <div class="dialog-heading"><h2 id="dropbox-title">Guardar nota no Dropbox</h2><button type="button" id="dropbox-close" aria-label="Fechar Dropbox">✕</button></div>
+    <p id="dropbox-selected-note">Escolha uma nota primeiro</p>
+    <p>Versão experimental. As notas continuam guardadas localmente e no Supabase; apenas as notas selecionadas são copiadas para o Dropbox.</p>
+    <label>Chave pública da aplicação Dropbox<input id="dropbox-key" type="text" autocomplete="off" spellcheck="false" placeholder="App key Dropbox"></label>
+    <div class="dialog-actions"><button type="button" id="dropbox-connect">Ligar Dropbox</button></div>
+    <label>Pasta do Dropbox<input id="dropbox-folder" type="text" placeholder="/Notas Pro" value="/Notas Pro"></label>
+    <div class="dialog-actions"><button type="button" id="dropbox-browse">Explorar pastas</button><button type="button" id="dropbox-create-folder">Criar pasta</button></div>
+    <div id="dropbox-folders" class="dropbox-folder-list"></div>
+    <div class="dialog-actions"><button type="button" id="dropbox-save">Guardar cópia desta nota</button><button type="button" id="dropbox-recover">Comparar com cópia</button><button type="button" id="dropbox-copy-link">Copiar ligação direta</button></div>
+    <p id="dropbox-status" role="status" aria-live="polite">Não ligado ao Dropbox.</p>
+    <small>A ligação direta requer sessão autorizada. A abertura imediata a partir de ficheiros no Android ainda necessita de validação.</small>
+  </dialog>
   <dialog id="link-dialog"><form id="link-form"><div class="dialog-heading"><h2>Adicionar ligação</h2><button id="cancel-link" type="button" aria-label="Cancelar ligação">✕</button></div><label>Endereço completo<input id="link-url" type="text" required placeholder="https://…"></label><label>Texto a mostrar (opcional)<input id="link-label" type="text" placeholder="Abrir página ou plano de tratamento"></label><p id="link-error" role="status"></p><div class="dialog-actions"><button type="submit">Adicionar ligação</button></div></form></dialog>
   </div>
-  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="private-access.js"></script>
+  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="dropbox-storage.js"></script><script src="dropbox-oauth.js"></script><script src="dropbox-ui.js"></script><script src="private-access.js"></script>
 </body></html>
 
 

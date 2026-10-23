@@ -20,6 +20,7 @@
   let user = privateAccess.session.user, active = null, savedRange = null, zIndex = 1, titleHtmlSupported = true, applyingEdit = false;
   let syncTimer, syncFlight = null, syncAgain = false, sessionEpoch = 0, pendingTitle = null, imageTarget = null, localSaveFailed = false;
   let noteDrag = null, noteRename = null;
+  let dropboxUI = null;
   let notes = loadNotes(storageKey());
   let favorites = readJSON(FAVORITES_KEY, {text:[],highlight:[]});
   if (!favorites || !Array.isArray(favorites.text) || !Array.isArray(favorites.highlight)) favorites = {text:[],highlight:[]};
@@ -200,7 +201,7 @@
     const ok = persist();
     if(ok){w.savedSnapshot=snapshot(w);w.savedNote={...notes.find(n=>n.id===w.id)};w.savedAt=w.savedNote.updatedAt;w.dirty=false;}
     w.footer.textContent = ok ? 'Guardado neste dispositivo' : 'Não guardado — armazenamento cheio';
-    if(ok) { status.textContent = user ? 'Guardado neste dispositivo; a aguardar sincronização' : 'Guardado neste dispositivo';scheduleSync(); }
+    if(ok) { status.textContent = user ? 'Guardado neste dispositivo; a aguardar sincronização' : 'Guardado neste dispositivo';scheduleSync();dropboxUI?.queue(w.id); }
     renderNotes(); return ok;
   }
   function activate(w) {
@@ -227,7 +228,7 @@
     const initial = data.rect || {x:14+(n%3)*36,y:14+(n%3)*32,w:width,h:height};
     const rect={w:clamp(initial.w,280,Math.max(280,workspace.clientWidth-16)),h:clamp(initial.h,240,Math.max(240,workspace.clientHeight-16)),x:0,y:0};
     rect.x=clamp(initial.x,0,workspace.clientWidth-rect.w);rect.y=clamp(initial.y,0,workspace.clientHeight-40);
-    const el=document.createElement('section');el.className='note-window';el.innerHTML=`<div class="window-bar"><button data-window="save" aria-label="Guardar nota" title="Guardar nota">${noteActionIcon('save')}</button><button data-window="menu" aria-label="Opções de formatação" title="Opções de formatação" aria-expanded="false">${noteActionIcon('menu')}</button><button data-window="close" aria-label="Fechar nota" title="Fechar nota sem eliminar">${noteActionIcon('close')}</button></div><div class="note-scroll"><div class="note-paper"><div class="note-editor" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui…" spellcheck="true"></div></div></div><div class="window-footer"><span>${note?'Guardado neste dispositivo':'Pronto para escrever'}</span><span>Gravação manual</span></div>`;
+    const el=document.createElement('section');el.className='note-window';el.innerHTML=`<div class="window-bar"><button data-window="save" aria-label="Guardar nota" title="Guardar nota">${noteActionIcon('save')}</button><button data-window="dropbox" aria-label="Guardar no Dropbox" title="Guardar no Dropbox">☁</button><button data-window="menu" aria-label="Opções de formatação" title="Opções de formatação" aria-expanded="false">${noteActionIcon('menu')}</button><button data-window="close" aria-label="Fechar nota" title="Fechar nota sem eliminar">${noteActionIcon('close')}</button></div><div class="note-scroll"><div class="note-paper"><div class="note-editor" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui…" spellcheck="true"></div></div></div><div class="window-footer"><span>${note?'Guardado neste dispositivo':'Pronto para escrever'}</span><span>Gravação manual</span></div>`;
     const w={id:note?.id||makeId(),title:note?.title === 'Sem título' ? '' : note?.title || '',el,editor:el.querySelector('.note-editor'),paper:el.querySelector('.note-paper'),footer:el.querySelector('.window-footer span'),...data,rect,selected:null,history:[],historyIndex:0};
     if(!note?.content&&route.searchParams.get('kind')==='onyx'){w.kind='onyx';w.onyxRows=decodeOnyx([{}, {}, {}, {}]);}w.editor.innerHTML=data.html;windows.set(w.id,w);workspace.append(el);geometry(w);linkify(w,false);display(w);w.history=[snapshot(w)];w.savedSnapshot=snapshot(w);w.savedAt=note?.updatedAt;w.savedNote=note?{...note}:null;w.dirty=false;
     const destination=validLocation({noteId:route.searchParams.get('parent'),folderId:route.searchParams.get('folder')});if(destination){w.location=destination;commit(w);}
@@ -235,7 +236,7 @@
     w.zoom=1;
     el.querySelectorAll('[data-window]').forEach(button=>button.addEventListener('click',()=>{
       activate(w);const action=button.dataset.window;
-      if(action==='close')closeNote(w);if(action==='save')saveNote(w);
+      if(action==='close')closeNote(w);if(action==='save')saveNote(w);if(action==='dropbox')dropboxUI?.open(w.id);
       if(action==='menu'){if(!menu.hidden){closeMenu();return;}const r=button.getBoundingClientRect();openMenu(w,r.left,r.bottom+3);}
     }));
     w.paper.addEventListener('contextmenu',e=>{if(mobileFormatMenu()){closeMenu();return;}e.preventDefault();openMenu(w,e.clientX,e.clientY);});
@@ -748,6 +749,7 @@
             const data=decode(n.content);w.editor.innerHTML=data.html;w.title=n.title||'';w.bg=data.bg;w.textWidth=data.textWidth;w.objects=data.objects;w.kind=data.kind;w.onyxRows=data.onyxRows;w.shipments=data.shipments;w.folders=data.folders;w.location=data.location;w.history=[snapshot(w)];w.historyIndex=0;w.savedSnapshot=snapshot(w);w.savedAt=n.updatedAt;w.savedNote={...n};w.selected=null;if(active===w)savedRange=null;display(w);
           }
         });
+        if (dropboxUI) for (const n of notes) if (!n.deletedAt && previous.get(n.id)!==n.updatedAt) dropboxUI.queue(n.id);
         if(detached&&!active&&notes.some(n=>n.id===detachedId&&!n.deletedAt))restoreWorkspace();renderNotes();status.textContent=[...windows.values()].some(w=>w.dirty)?'Notas guardadas sincronizadas · existem alterações por guardar':'Sincronizado';
       }catch{if(epoch===sessionEpoch)status.textContent='Guardado neste dispositivo; sincronização pendente. Verifique a ligação ou a conta.';}
     })();
@@ -952,6 +954,24 @@
   // Pointer capture and re-rendering keep their target on this stable list.
   $('#sidebar-notes-list').addEventListener('contextmenu',e=>{if(!e.target.closest('input'))e.preventDefault();});
   $('#sidebar-notes-list').addEventListener('auxclick',e=>{if(e.button===2&&!e.target.closest('input'))e.preventDefault();});
+  if (window.NotasDropboxUI) {
+    dropboxUI = window.NotasDropboxUI.create({
+      owner: user.id,
+      getCurrentOwner: () => user.id,
+      getActiveId: () => active?.id || null,
+      openNote: id => openDetached(id),
+      getNote: id => notes.find(n => n.id === id && !n.deletedAt),
+      ensureSaved: id => {
+        const w = windows.get(id);
+        if (w && (w.dirty || !notes.some(n => n.id === id && !n.deletedAt))) return saveNote(w);
+        return notes.some(n => n.id === id && !n.deletedAt);
+      },
+      currentUrl: new URL('./', location.href).href
+    });
+    dropboxUI.resume().catch(() => {
+      $('#dropbox-status').textContent = 'Não foi possível concluir a autorização Dropbox.';
+    });
+  }
   setupMenu();setupLinks();setAuthView();restoreWorkspace();renderNotes();restorePrivateDrafts();
   window.dispatchEvent(new Event('notas:private-ready'));
   scheduleSync();

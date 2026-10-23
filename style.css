@@ -167,3 +167,12 @@ body.note-options-open #custom-context-menu{position:fixed;left:auto!important;r
 .text-box>.textbox-body>.textbox-canvas>.textbox-editor{padding-right:28px}
 .text-box:not(.pinned)>.textbox-body,.text-box:not(.pinned)>.textbox-body>.textbox-canvas{cursor:move}
 @media(pointer:coarse){.object-lock{width:36px;height:36px}.text-box>.textbox-body>.textbox-canvas>.textbox-editor{padding-right:36px}}
+
+/* Dropbox experimental: manter o seletor de pastas compacto em desktop e mobile. */
+.dropbox-folder-list{display:flex;flex-wrap:wrap;gap:6px;max-height:165px;overflow-y:auto;margin:8px 0}
+.dropbox-folder-list button{font:inherit;padding:7px 10px;border:1px solid #b6bec7;border-radius:7px;background:#f4f6f8;color:#1d2730;cursor:pointer}
+#dropbox-dialog label{display:block;margin:12px 0 8px}
+#dropbox-dialog label input{display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:9px 11px}
+#dropbox-dialog .dialog-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+#dropbox-dialog small{display:block;margin-top:12px}
+.window-bar [data-window="dropbox"]{font-size:22px}

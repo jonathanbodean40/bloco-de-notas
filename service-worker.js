@@ -1,5 +1,5 @@
-const CACHE='notas-pro-v36-session-start';
-const FILES=['./','./index.html','./style.css','./private-access.js','./app.js','./vendor/supabase-js-v2.js','./spell-worker.js','./config.js','./manifest.webmanifest','./icon.svg'];
+const CACHE='notas-pro-v37-dropbox-dev';
+const FILES=['./','./index.html','./style.css','./private-access.js','./app.js','./dropbox-storage.js','./dropbox-oauth.js','./dropbox-ui.js','./vendor/supabase-js-v2.js','./spell-worker.js','./config.js','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES.map(file=>new Request(file,{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('notas-pro-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
