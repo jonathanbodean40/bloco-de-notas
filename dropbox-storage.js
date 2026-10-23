@@ -119,6 +119,31 @@
     }
   }
 
+  function errorKind(error) {
+    if (!error || error.status !== 409) return null;
+    let details = typeof error.details === 'string' ? error.details : JSON.stringify(error.details || '');
+    try {
+      const parsed = JSON.parse(details);
+      details = String(parsed.error_summary || '') + ' ' + details;
+    } catch (_) {}
+    if (/no_write_permission|insufficient_space|restricted_content/i.test(details)) return 'permission';
+    if (/not_found|not found/i.test(details)) return 'missing';
+    if (/conflict/i.test(details)) return 'conflict';
+    return 'other409';
+  }
+
+  function userMessage(error) {
+    if (errorKind(error) === 'missing')
+      return 'A pasta ou o ficheiro escolhido não existe no Dropbox. Confirme o caminho ou crie a pasta.';
+    if (errorKind(error) === 'conflict')
+      return 'O ficheiro já existe ou foi alterado no Dropbox. Nenhuma versão foi substituída.';
+    if (errorKind(error) === 'permission')
+      return 'O Dropbox recusou a escrita nesta pasta ou a conta não tem espaço suficiente.';
+    if (error?.status === 401) return 'A ligação ao Dropbox expirou. Autorize a aplicação novamente.';
+    if (error?.status === 429) return 'O Dropbox limitou temporariamente os pedidos. Volte a tentar.';
+    return error?.message || 'Falha na operação Dropbox.';
+  }
+
   class Client {
     constructor(options) {
       if (!options || typeof options.getToken !== 'function') throw new TypeError('É necessário um fornecedor de token');
@@ -172,6 +197,36 @@
       return response.json();
     }
 
+    async ensureFolder(path) {
+      const full = folderPath(path);
+      if (!full) throw new TypeError('Selecione uma pasta dentro do Dropbox');
+      let current = '';
+      const created = [];
+      for (const name of full.slice(1).split('/')) {
+        current += '/' + name;
+        let existing = null;
+        try { existing = await this.metadata(current); }
+        catch (err) {
+          if (errorKind(err) !== 'missing') throw err;
+        }
+        if (existing) {
+          if (existing['.tag'] !== 'folder')
+            throw new Error('O caminho ' + current + ' é um ficheiro, não uma pasta');
+          continue;
+        }
+        try {
+          await this.createFolder(current);
+          created.push(current);
+        } catch (err) {
+          // Outro dispositivo pode ter criado a pasta entretanto.
+          if (errorKind(err) !== 'conflict') throw err;
+          const updated = await this.metadata(current);
+          if (updated['.tag'] !== 'folder') throw err;
+        }
+      }
+      return {path:full,created};
+    }
+
     async upload(path, contents, knownRevision) {
       string(path, 'Caminho do ficheiro');
       if (typeof contents !== 'string') throw new TypeError('Conteúdo de backup inválido');
@@ -199,7 +254,7 @@
   }
 
   const API = Object.freeze({FORMAT, folderPath, noteFilename, notePath, deepLink,
-    serialize, deserialize, importableNote, revisionDecision, Client, DropboxError});
+    serialize, deserialize, importableNote, revisionDecision, errorKind, userMessage, Client, DropboxError});
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.NotasDropboxStorage = API;
 })(globalThis);

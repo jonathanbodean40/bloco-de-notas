@@ -22,7 +22,7 @@
     const pending = new Map();
     const waiting = new Set();
     keyInput.value = localStorage.getItem(appKeyKey) || root.NOTAS_CONFIG?.dropboxAppKey || '';
-    folderInput.value = localStorage.getItem(folderKey) || '/Notas Pro';
+    folderInput.value = localStorage.getItem(folderKey) || '/Bloco de Notas Pro/Notas';
     const readMap = () => {
       try {
         const value = JSON.parse(localStorage.getItem(mappingsKey) || '{}');
@@ -151,7 +151,14 @@
         const path = previous && previous.folder === folder ? previous.path : db.notePath(folder, note);
         const revision = previous && previous.path === path ? previous.rev : null;
         const raw = db.serialize(note, owner, currentUrl);
-        const result = await client().upload(path, raw, revision);
+        const remote = client();
+        // A explicit action may create a missing destination folder, without
+        // changing another note or replacing an existing remote file.
+        if (explicit) {
+          say('A verificar a pasta de destino no Dropbox…');
+          await remote.ensureFolder(folder);
+        }
+        const result = await remote.upload(path, raw, revision);
         const latest = getNote(id);
         map[id] = {path, folder, rev: result.rev, syncedAt: note.updatedAt, updated: new Date().toISOString()};
         saveMap(map);
@@ -174,7 +181,7 @@
       const timer = setTimeout(() => {
         pending.delete(id);
         backup(id, false).catch(err => {
-          if (selectedId === id) say('Dropbox pendente: ' + (err.status === 409 ? 'há um conflito de versões' : err.message));
+          if (selectedId === id) say('Dropbox pendente: ' + db.userMessage(err));
         });
       }, 2000);
       pending.set(id, timer);
@@ -316,8 +323,8 @@
     }
     async function createFolder() {
       const path = safeFolder();
-      await client().createFolder(path);
-      say('Pasta criada: ' + path);
+      const result = await client().ensureFolder(path);
+      say(result.created.length ? 'Pasta criada: ' + path : 'A pasta já existe: ' + path);
     }
     async function saveSelected() {
       const id = selectedId;
@@ -363,9 +370,7 @@
       ['dropbox-sync-all',syncPrimary]
     ];
     for (const [id, action] of events) $(id).addEventListener('click', () => {
-      Promise.resolve().then(action).catch(err => say(err.status === 409
-        ? 'Conflito Dropbox: a versão na nuvem foi alterada e não foi substituída.'
-        : err.message || 'Falha na operação'));
+      Promise.resolve().then(action).catch(err => say(db.userMessage(err)));
     });
     root.addEventListener('online', retryMapped);
     let lastForegroundSync=0;

@@ -212,6 +212,7 @@ async function restored(name, variant, verifyFeatures=false) {
   check(motion.every(s=>s.animationName==='none' && s.animationDuration==='0s' && s.transitionDuration==='0s'), `${name}: startup surfaces have no CSS animation/transition`);
   let features;
   if(verifyFeatures==='primary') features=await verifyPrimaryMode(page);
+  else if(verifyFeatures==='manual') features=await verifyManualDropboxFolder(page);
   else if(verifyFeatures) features=await verifyNoteFeatures(page);
   const getStart=ready.events.find(e=>e.type==='getSession-start').at;
   const getEnd=ready.events.find(e=>e.type==='getSession-end').at;
@@ -375,6 +376,84 @@ async function verifyPrimaryMode(page) {
   return {...result,tokenVault,mobile};
 }
 
+async function verifyManualDropboxFolder(page) {
+  await page.locator('#close-sidebar-btn').click();
+  await page.locator('.note-editor').first().waitFor({state:'visible'});
+  await page.evaluate(() => {
+    document.querySelector('#dropbox-key').value='synthetickey';
+    document.querySelector('#dropbox-folder').value='/Notas Pro';
+    sessionStorage.setItem('notas-pro-dropbox-pkce-v1:synthetic-owner:synthetickey:tokens',
+      JSON.stringify({access_token:'synthetic-only',expires_at:Date.now()+3600000}));
+    const folders=new Set(['']),files=new Map(),requests=[];
+    let rev=0;
+    window.__manualDropbox={folders,files,requests};
+    const previous=window.fetch;
+    window.fetch=async(url,options={})=>{
+      if(!String(url).includes('dropboxapi.com'))return previous(url,options);
+      const endpoint=new URL(String(url)).pathname;
+      const args=endpoint.endsWith('/upload')
+        ? JSON.parse(options.headers['Dropbox-API-Arg'])
+        : JSON.parse(options.body||'{}');
+      requests.push({endpoint,path:args.path,mode:args.mode});
+      const respond=(data,status=200)=>new Response(JSON.stringify(data),{status});
+      const missing=()=>respond({error_summary:'path/not_found/...'},409);
+      if(endpoint.endsWith('/get_metadata')){
+        if(folders.has(args.path))return respond({'.tag':'folder',path_display:args.path});
+        if(files.has(args.path))return respond({'.tag':'file',rev:files.get(args.path).rev});
+        return missing();
+      }
+      if(endpoint.endsWith('/create_folder_v2')){
+        const parent=args.path.slice(0,args.path.lastIndexOf('/'));
+        if(!folders.has(parent))return missing();
+        if(folders.has(args.path)||files.has(args.path))
+          return respond({error_summary:'path/conflict/folder/...'},409);
+        folders.add(args.path);
+        return respond({metadata:{'.tag':'folder',path_display:args.path}});
+      }
+      if(endpoint.endsWith('/upload')){
+        const parent=args.path.slice(0,args.path.lastIndexOf('/'));
+        if(!folders.has(parent))return missing();
+        const previousFile=files.get(args.path),requestedRev=args.mode?.update;
+        if(previousFile && previousFile.rev!==requestedRev)
+          return respond({error_summary:'path/conflict/file/...'},409);
+        if(previousFile && !requestedRev)return respond({error_summary:'path/conflict/file/...'},409);
+        const raw=new TextDecoder().decode(options.body);
+        const next='synthetic-rev-'+(++rev);
+        files.set(args.path,{raw,rev:next});
+        return respond({rev:next,path_display:args.path});
+      }
+      throw Error('Endpoint não previsto no teste: '+endpoint);
+    };
+  });
+  await page.locator('#dropbox-btn').click();
+  check((await page.locator('#dropbox-folder').inputValue())==='/Notas Pro',
+    'manual: user selected missing folder retained');
+  await page.locator('#dropbox-save').click();
+  await page.waitForFunction(()=>document.querySelector('#dropbox-status').textContent.startsWith('Guardado no Dropbox:'),{timeout:10000});
+  const first=await page.evaluate(()=>{
+    const m=window.__manualDropbox;
+    const remote=[...m.files.entries()];
+    const hasFolder=m.folders.has('/Notas Pro');
+    const stored=remote.map(([path,data])=>({path,payload:JSON.parse(data.raw)}));
+    return {hasFolder,fileCount:remote.length,noteId:stored[0]?.payload?.note?.id,
+      expectedPath:stored[0]?.path||'',creates:m.requests.filter(r=>r.endpoint.endsWith('/create_folder_v2')).length};
+  });
+  check(first.hasFolder,'manual: missing Dropbox folder created upon explicit save only');
+  check(first.fileCount===1,'manual: exactly one synthetic note uploaded');
+  check(first.creates===1,'manual: only the selected folder created');
+  check(first.noteId==='synthetic-note-a','manual: note ID preserved');
+  const source=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),storageKey);
+  check(source.length===notes.length,'manual: existing local note count unchanged');
+  await page.locator('#dropbox-save').click();
+  await page.waitForFunction(()=>window.__manualDropbox.requests.filter(r=>r.endpoint.endsWith('/upload')).length===2,{timeout:10000});
+  const after=await page.evaluate(()=>{
+    const m=window.__manualDropbox;
+    return {fileCount:m.files.size,updates:m.requests.filter(r=>r.endpoint.endsWith('/upload')&&r.mode?.['.tag']==='update').length};
+  });
+  check(after.fileCount===1&&after.updates===1,'manual: second save updates by Dropbox revision without creating a duplicate');
+  return {hasFolder:first.hasFolder,fileCount:after.fileCount,updates:after.updates};
+}
+
 async function blockedCase(name, sessionMode, rpcResult) {
   const testCase=await openCase(name),{page}=testCase;
   await page.evaluate(mode=>window.__startupTest.releaseSession(mode),sessionMode);
@@ -401,6 +480,7 @@ let origin;
   evidence.environment.browserVersion=browser.version();
   await restored('current-valid-session','current',true);
   await restored('current-dropbox-primary','current','primary');
+  await restored('current-manual-missing-folder','current','manual');
   await blockedCase('no-session','none');
   await blockedCase('session-restore-error','error');
   await blockedCase('device-limit-denial','valid',{data:denied('device_limit'),error:null});
