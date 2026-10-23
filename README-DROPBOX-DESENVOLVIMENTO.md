@@ -38,7 +38,7 @@ Estes testes NÃO confirmam compatibilidade real com uma conta Dropbox autorizad
 
 Dropbox App Console: https://www.dropbox.com/developers/apps
 Tipo de app: Scoped access, Full Dropbox (para pastas arbitrárias).
-Permissões: files.content.read, files.content.write, files.metadata.read e files.metadata.write.
+Permissões: files.content.read, files.content.write, files.metadata.read, files.metadata.write e account_info.read (identificar a conta durante a validação OAuth).
 OAuth Redirect URI exata de produção:
 https://jonathanbodean40.github.io/bloco-de-notas/
 

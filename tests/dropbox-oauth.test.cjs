@@ -19,6 +19,9 @@ test('OAuth PKCE utiliza state, code challenge e redirecionamento seguro',async(
   assert.equal(start.searchParams.get('client_id'),appKey);
   assert.ok(start.searchParams.get('code_challenge').length>=40);
   assert.equal(start.searchParams.get('token_access_type'),'offline');
+  assert.deepEqual(new Set(start.searchParams.get('scope').split(' ')),new Set([
+    'files.content.read','files.content.write','files.metadata.read','files.metadata.write','account_info.read'
+  ]));
   assert.ok(!oauth.connected());
   const state=start.searchParams.get('state');
   const back=await oauth.finish('?code=synthetic-code&state='+state);

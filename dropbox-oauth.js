@@ -7,7 +7,7 @@
   const OAUTH = 'https://www.dropbox.com/oauth2/authorize';
   const TOKEN = 'https://api.dropboxapi.com/oauth2/token';
   const PREFIX = 'notas-pro-dropbox-pkce-v1:';
-  const SCOPES = 'files.content.read files.content.write files.metadata.read files.metadata.write';
+  const SCOPES = 'files.content.read files.content.write files.metadata.read files.metadata.write account_info.read';
 
   const b64 = bytes => {
     let result = '';
