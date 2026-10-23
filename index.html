@@ -6,7 +6,7 @@
   <title>Notas Exclusivas Pro</title>
   <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Notas Pro">
   <link rel="preload" href="app.js" as="script">
-  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="keep-aligner-tool.css">
   <style>[hidden]{display:none!important}body.private-locked>#private-app{display:none!important}</style>
 </head>
 <body class="private-locked">
@@ -44,6 +44,7 @@
     <div class="brand">Notas Exclusivas Pro</div>
   </header>
   <footer id="app-footer" aria-label="Conta e sincronização">
+    <button id="keep-aligner-tool-btn" type="button" aria-haspopup="dialog" aria-controls="keep-aligner-dialog" title="Abrir ferramenta KEEP ALIGNER">KEEP ALIGNER</button>
     <button id="account-btn">Conta</button>
     <button id="sync-icon-btn" aria-label="Sincronizar" title="Sincronizar">⟳</button>
     <span id="save-status" role="status" aria-live="polite"></span>
@@ -118,8 +119,24 @@
   </form></dialog>
   <dialog id="trash-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Notas excluídas</h2><button data-close="trash-dialog" aria-label="Fechar notas excluídas">✕</button></div><p>Restaurar recupera a última versão guardada.</p><div id="trash-list" class="records-list"></div></dialog>
   <dialog id="link-dialog"><form id="link-form"><div class="dialog-heading"><h2>Adicionar ligação</h2><button id="cancel-link" type="button" aria-label="Cancelar ligação">✕</button></div><label>Endereço completo<input id="link-url" type="text" required placeholder="https://…"></label><label>Texto a mostrar (opcional)<input id="link-label" type="text" placeholder="Abrir página ou plano de tratamento"></label><p id="link-error" role="status"></p><div class="dialog-actions"><button type="submit">Adicionar ligação</button></div></form></dialog>
+  <dialog id="keep-aligner-dialog" aria-labelledby="keep-aligner-title" aria-describedby="keep-aligner-intro">
+    <div class="ka-heading"><div><span class="ka-eyebrow">FERRAMENTA DE TRABALHO</span><h2 id="keep-aligner-title">Gerador KEEP ALIGNER</h2></div><button id="keep-aligner-close" type="button" aria-label="Fechar ferramenta KEEP ALIGNER">✕</button></div>
+    <p id="keep-aligner-intro">Preencha o caso, copie o pedido e cole no agente ligado ao MSI. Esta ferramenta não executa o gerador nem publica em My Keep.</p>
+    <ol class="ka-steps"><li><strong>Prepare o MSI</strong><span>Ligado, Remote Desktop Commander conectado e plataformas autenticadas no Chrome.</span></li><li><strong>Copie o pedido</strong><span>Escolha somente guia ou apresentação completa nos botões abaixo.</span></li><li><strong>Cole no agente</strong><span>Work/Codex com acesso ao MSI. No telemóvel, use o agente com essa ligação.</span></li></ol>
+    <form id="keep-aligner-form" autocomplete="off">
+      <label for="ka-reference">Referência ou link da ficha do caso <span class="ka-required">obrigatório</span></label>
+      <input id="ka-reference" name="reference" type="text" required maxlength="2000" placeholder="#CÓDIGO ou link da ficha em My Keep" autocapitalize="off" spellcheck="false" autocomplete="off">
+      <div class="ka-grid"><div><label for="ka-planning">Link 3D do plano <span>opcional</span></label><input id="ka-planning" name="planning" type="url" maxlength="6000" placeholder="https://…" autocapitalize="off" spellcheck="false" autocomplete="off"></div><div><label for="ka-status">Estado clínico do plano</label><select id="ka-status" name="status"><option value="unknown">Não confirmado — consultar o caso</option><option value="approved">Aprovado pelo doutor</option><option value="review">Em revisão — ainda não aprovado</option></select></div></div>
+      <details class="ka-more"><summary>Mais informações <span>opcional</span></summary><div class="ka-grid"><div><label for="ka-version">Versão do plano</label><input id="ka-version" name="version" type="text" maxlength="160" placeholder="Ex.: Plano de Tratamento 2"></div><div><label for="ka-kind">Tipo de tratamento</label><select id="ka-kind" name="kind"><option value="unknown">Consultar no caso</option><option value="new">Novo</option><option value="modified">Modificado</option><option value="refinement">Refinamento</option></select></div></div><label for="ka-notes">Informação adicional para este caso</label><textarea id="ka-notes" name="notes" rows="3" maxlength="2000" placeholder="Ex.: nome do médico, clínica ou instrução específica."></textarea></details>
+      <div class="ka-copy-actions"><button id="ka-copy-guide" type="button">Copiar pedido — somente guia</button><button id="ka-copy-presentation" type="button">Copiar pedido — apresentação completa</button></div>
+    </form>
+    <p id="ka-copy-status" class="ka-copy-status" role="status" aria-live="polite">Preencha a referência do caso e escolha um dos pedidos.</p>
+    <section id="ka-result" hidden aria-labelledby="ka-result-title"><div class="ka-result-heading"><h3 id="ka-result-title">Pedido gerado</h3><span>Pronto para colar no agente</span></div><textarea id="ka-output" rows="10" readonly aria-label="Pedido KEEP ALIGNER gerado" spellcheck="false"></textarea></section>
+    <details class="ka-manual"><summary>Manual rápido e lista de conferência</summary><div class="ka-manual-content"><h3>Passo a passo</h3><ol><li>Deixe o MSI ligado, com Dropbox disponível, PowerPoint instalado e Remote Desktop Commander conectado.</li><li>Escolha um agente com acesso ao MSI. Configuração inicial sugerida no manual: GPT-6.1 Sol, esforço Médio, se disponível; alternativa Astra, Médio. O modelo não concede acesso ao PC.</li><li>Preencha a referência, acrescente o link/versão quando disponível e copie um dos dois pedidos. Não precisa de copiar a conversa antiga.</li><li>Cole o pedido no agente. Para vários casos, peça execução por ordem, sem misturar fichas e versões.</li><li>Confira a prévia. Só depois autorize expressamente a publicação daquele pacote/caso/versão em My Keep. Publicação não é aprovação clínica.</li><li>Se houver interrupção, peça para retomar o mesmo caso e versão pelo estado guardado, reutilizando as etapas válidas.</li></ol><h3>Antes de aceitar o material</h3><ul><li>Identificação e contagens corretas; nomes em maiúsculas e modelo padrão preservado.</li><li>Attachments centrados na coroa; X apenas em ausências confirmadas; IPR no contacto correto, com etapas e quantidades legíveis.</li><li>Botões, faces e ligações dos elásticos de acordo com o caso; não reutilizar dados clínicos do exemplo.</li><li>Relatório numa única caixa de texto, com as considerações clínicas importantes.</li><li>Na apresentação: capturas reais sem contactos oclusais visíveis, orientação/escala comparáveis, tabela completa e legível, preço aplicável + IVA.</li></ul><h3>Referência oficial e arquivo</h3><p>O agente deve consultar as duas páginas do modelo editável indicado no manual do MSI. O exemplo não é prescrição para outro paciente.</p><code class="ka-path">C:/Users/ferna/Dropbox/1_KEEP ALIGNER PORTUGAL/FLUXO DE TRABALHO KEEP ALIGNER/GERADOR KEEP ALIGNER/assets/guia-oficial.pptx</code><p>INFORME: guia definitiva e restantes materiais solicitados, incluindo o link 3D Keep da mesma versão quando disponível. ARQUIVOS DE APOIO: fontes técnicas, CSV, tabela, IIWGL e palavra-passe. Não substituir o link Keep pelo Hirsch.</p><p>O gerador ainda exige conferência visual e tem limites de idioma/mecânicas. O agente deve indicar pendências, nunca inventar dados ou desativar validações.</p></div></details>
+    <p class="ka-privacy">Os campos desta ferramenta não são guardados nas notas nem enviados para um servidor. Permanecem apenas nesta página até a recarregar. Copiar coloca o pedido na área de transferência.</p>
+  </dialog>
   </div>
-  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="private-access.js"></script>
+  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="private-access.js"></script><script src="keep-aligner-tool.js"></script>
 </body></html>
 
 
