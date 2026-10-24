@@ -66,17 +66,43 @@
       this.owner=owner;this.client=client;this.getNotes=getNotes;
       this.importNote=importNote;this.applyRemote=applyRemote;
       this.storage=storage||root.localStorage;
-      this.mapKey=MAP_KEY+owner;this.primaryKey=PRIMARY_KEY+owner;
+      this.mapKey=MAP_KEY+owner;
+      this.itemKey=this.mapKey+':note:';
+      this.primaryKey=PRIMARY_KEY+owner;
       this.flight=null;
     }
     enabled(){return this.storage.getItem(this.primaryKey)==='1';}
     setEnabled(value){if(value)this.storage.setItem(this.primaryKey,'1');else this.storage.removeItem(this.primaryKey);}
     readMap(){
-      try{const data=JSON.parse(this.storage.getItem(this.mapKey)||'{}');
-        return data && typeof data==='object'&&!Array.isArray(data)?data:{};}
-      catch(_){return {};}
+      // Historical checkpoints live in a single JSON object. Two open tabs
+      // could previously overwrite each other's entire object from stale reads.
+      // Per-note checkpoints avoid lost updates between different note IDs.
+      let legacy={};
+      try {
+        const parsed=JSON.parse(this.storage.getItem(this.mapKey)||'{}');
+        if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))legacy=parsed;
+      } catch (_) {}
+      const result={...legacy};
+      for(const note of this.getNotes()){
+        if(!note?.id)continue;
+        try {
+          const value=this.storage.getItem(this.itemKey+note.id);
+          if(!value)continue;
+          const checkpoint=JSON.parse(value);
+          if(checkpoint&&typeof checkpoint==='object'&&
+            typeof checkpoint.path==='string'&&typeof checkpoint.rev==='string') {
+            result[note.id]=checkpoint;
+          }
+        } catch (_) {}
+      }
+      return result;
     }
-    saveMap(map){this.storage.setItem(this.mapKey,JSON.stringify(map));}
+    saveMap(map,id){
+      if(!id||!map?.[id]||typeof map[id].path!=='string'||typeof map[id].rev!=='string')
+        throw new Error('Checkpoint Dropbox incompleto');
+      // Never write back a whole, possibly stale map from another tab.
+      this.storage.setItem(this.itemKey+id,JSON.stringify(map[id]));
+    }
     async ensureFolder(path) {
       if(!path)return;
       let prefix='';
@@ -163,7 +189,7 @@
       const updated={path,rev:metadata.rev,updatedAt:note.updatedAt,deletedAt:note.deletedAt||null};
       await this.changeIndex(note.id,expected,updated);
       map[note.id]={path,rev:metadata.rev,hash:await fingerprint(note),syncedAt:note.updatedAt};
-      this.saveMap(map);
+      this.saveMap(map,note.id);
       return updated;
     }
     async reconcile(options={}) {
@@ -188,7 +214,7 @@
               const remote=await this.readNote(entry,id);
               if(!this.importNote(remote))throw conflict('Não foi possível recuperar a nota no dispositivo');
               map[id]={path:entry.path,rev:entry.rev,hash:await fingerprint(remote),syncedAt:remote.updatedAt};
-              this.saveMap(map);result.pulled++;
+              this.saveMap(map,id);result.pulled++;
               continue;
             }
             const localHash=await fingerprint(local);
@@ -196,7 +222,7 @@
               // Migrate old raw-timestamp checkpoints without uploading data.
               if(known.hash!==localHash) {
                 map[id]={...known,hash:localHash};
-                this.saveMap(map);
+                this.saveMap(map,id);
               }
               result.unchanged++;continue;
             }
@@ -218,7 +244,7 @@
             } else result.unchanged++;
           }
           map[id]={path:entry.path,rev:entry.rev,hash:remoteHash,syncedAt:remote.updatedAt};
-          this.saveMap(map);
+          this.saveMap(map,id);
         }catch(err) {
           if(err.code!=='DROPBOX_CONFLICT')throw err;
           result.conflicts.push({id,message:err.message});
@@ -266,7 +292,7 @@
       await this.changeIndex(note.id,old,replacement);
       const map=this.readMap();
       map[note.id]={path,rev:meta.rev,hash:await fingerprint(note),syncedAt:note.updatedAt};
-      this.saveMap(map);
+      this.saveMap(map,note.id);
       // Retain the previous copy as a recoverable historical file, never delete it silently.
       return {path,oldPath:old.path};
     }

@@ -1,4 +1,4 @@
-const CACHE='notas-pro-v43-dropbox-timestamp-normalization';
+const CACHE='notas-pro-v44-dropbox-multitab-checkpoints';
 const FILES=['./','./index.html','./style.css','./keep-aligner-tool.css','./keep-aligner-tool.js','./private-access.js','./app.js','./dropbox-storage.js','./dropbox-token-vault.js','./dropbox-oauth.js','./dropbox-primary.js','./dropbox-ui.js','./vendor/supabase-js-v2.js','./spell-worker.js','./config.js','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES.map(file=>new Request(file,{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('notas-pro-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

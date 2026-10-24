@@ -49,8 +49,8 @@ class FakeDropbox {
     return file.body;
   }
 }
-function device(cloud,seed=[]) {
-  const items=clone(seed),local=store();
+function device(cloud,seed=[],sharedStorage=null) {
+  const items=clone(seed),local=sharedStorage||store();
   const engine=new Primary({
     owner,client:()=>cloud,getNotes:()=>clone(items),
     importNote:note=>{
@@ -67,6 +67,26 @@ function device(cloud,seed=[]) {
   });
   return {items,local,engine};
 }
+test('duas janelas preservam checkpoints de notas diferentes mesmo com snapshots antigos',async()=>{
+  const cloud=new FakeDropbox(),shared=store();
+  const a=device(cloud,[basic('tab-a','Nota A')],shared);
+  await a.engine.enable();
+  const oldSnapshot=a.engine.readMap();
+  const b=device(cloud,[basic('tab-a','Nota A'),basic('tab-b','Nota B')],shared);
+  const first=await b.engine.reconcile();
+  assert.equal(first.pushed,1);
+  assert.ok(b.engine.readMap()['tab-b'],'A nota B tem checkpoint depois de ser enviada');
+  a.engine.saveMap(oldSnapshot,'tab-a');
+  const restored=b.engine.readMap();
+  assert.ok(restored['tab-b'],'Uma atualização antiga da nota A não apaga o checkpoint de B');
+  b.items.find(n=>n.id==='tab-b').title='Nota B renomeada';
+  b.items.find(n=>n.id==='tab-b').updatedAt='2026-10-23T11:00:00.000Z';
+  const second=await b.engine.reconcile();
+  assert.equal(second.conflicts.length,0,'Não apresenta conflito falso');
+  assert.equal(second.pushed,1,'O título alterado foi sincronizado automaticamente');
+  const entry=JSON.parse(cloud.files.get(INDEX).body).entries['tab-b'];
+  assert.equal(db.deserialize(cloud.files.get(entry.path).body,owner).title,'Nota B renomeada');
+});
 test('datas equivalentes com formatos distintos não criam falso conflito na migração',async()=>{
   const cloud=new FakeDropbox();
   const id='same-instant';
