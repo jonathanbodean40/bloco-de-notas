@@ -6,7 +6,7 @@
   <title>Notas Exclusivas Pro</title>
   <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Notas Pro">
   <link rel="preload" href="app.js" as="script">
-  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="keep-aligner-tool.css">
+  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="keep-aligner-tool.css"><link rel="stylesheet" href="dropbox-feedback.css">
   <style>[hidden]{display:none!important}body.private-locked>#private-app{display:none!important}</style>
 </head>
 <body class="private-locked">
@@ -136,7 +136,9 @@
       <p>Modo local-first: a escrita continua imediata no dispositivo; o Dropbox recebe as notas em segundo plano, com histórico de revisões. O Supabase permanece como cópia adicional.</p>
       <p id="dropbox-primary-status" role="status" aria-live="polite">Modo principal ainda não ativado.</p>
       <div id="dropbox-conflicts" class="dropbox-conflict-list" aria-live="polite"></div>
+      <p id="dropbox-activation-feedback" class="dropbox-activation-feedback" role="status" aria-live="polite" data-state="info">Antes de ativar no POCO, verifica as divergências. Esta análise não altera notas.</p>
       <div class="dialog-actions">
+        <button type="button" id="dropbox-inspect-conflicts">Verificar conflitos</button>
         <button type="button" id="dropbox-enable-primary">Ativar Dropbox como principal</button>
         <button type="button" id="dropbox-sync-all">Sincronizar com Dropbox agora</button>
       </div>

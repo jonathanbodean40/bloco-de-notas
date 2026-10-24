@@ -220,6 +220,49 @@
       this.saveMap(map,note.id);
       return updated;
     }
+    async previewDifferences() {
+      // Read-only assessment for the activation screen. Never upload, import,
+      // alter checkpoints or replace notes simply to explain a conflict.
+      if(this.flight) throw new Error('Aguarde que a sincronização Dropbox atual termine.');
+      const {index}=await this.readIndex(false);
+      const localNotes=this.getNotes();
+      const localById=new Map(localNotes.map(note=>[note.id,note]));
+      if(!index) return {
+        conflicts:[],missingRemote:localNotes.length,missingLocal:0,
+        pendingChanges:0,checked:0,indexMissing:true
+      };
+      const knownMap=this.readMap();
+      const conflicts=[];
+      let missingLocal=0,pendingChanges=0,checked=0;
+      for(const [id,entry] of Object.entries(index.entries)) {
+        const local=localById.get(id);
+        if(!local){missingLocal++;continue;}
+        checked++;
+        const known=knownMap[id];
+        const localHash=await fingerprint(local);
+        // A trusted revision checkpoint confirms unchanged notes without
+        // downloading their bodies, keeping the check fast on mobile.
+        if(known && sameEntry(known,entry)) {
+          if(!(await matchesCheckpoint(local,known,localHash)))
+            pendingChanges++; // Local update can be uploaded by CAS after approval.
+          continue;
+        }
+        const remote=await this.readNote(entry,id);
+        if(await semanticFingerprint(local)===await semanticFingerprint(remote))
+          continue;
+        // The local note was not modified since its checkpoint, so the remote
+        // version can be pulled safely after activation.
+        if(known && await matchesCheckpoint(local,known,localHash)){
+          pendingChanges++;continue;
+        }
+        conflicts.push({
+          id,
+          message:'Alterações diferentes em dois dispositivos; requer revisão'
+        });
+      }
+      const missingRemote=localNotes.filter(note=>!index.entries[note.id]).length;
+      return {conflicts,missingRemote,missingLocal,pendingChanges,checked,indexMissing:false};
+    }
     async reconcile(options={}) {
       if(this.flight)return this.flight;
       this.flight=this._reconcile(options);

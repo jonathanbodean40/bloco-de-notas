@@ -51,6 +51,14 @@
     });
     const modeStatus = $('dropbox-primary-status');
     const conflictList = $('dropbox-conflicts');
+    const activationFeedback = $('dropbox-activation-feedback');
+    let activationBusy = false;
+    function showActivationFeedback(message,state='info',reveal=false) {
+      activationFeedback.textContent=message;
+      activationFeedback.dataset.state=state;
+      if(reveal && box.open && typeof activationFeedback.scrollIntoView==='function')
+        activationFeedback.scrollIntoView({block:'nearest',behavior:'auto'});
+    }
     function renderConflicts(conflicts) {
       conflictList.replaceChildren();
       if (!Array.isArray(conflicts) || !conflicts.length) return;
@@ -153,10 +161,41 @@
       modeStatus.textContent = message || (active
         ? 'Dropbox principal ativo neste dispositivo. As notas são gravadas localmente e sincronizadas na nuvem.'
         : 'Armazenamento principal atual preservado. O Dropbox ainda é opcional.');
-      $('dropbox-enable-primary').disabled = active;
-      $('dropbox-sync-all').disabled = !active;
+      $('dropbox-enable-primary').disabled = active || activationBusy;
+      $('dropbox-inspect-conflicts').disabled = activationBusy;
+      $('dropbox-sync-all').disabled = !active || activationBusy;
+    }
+    function reportActivation(message,state='info',reveal=false) {
+      updateMode(message);
+      showActivationFeedback(message,state,reveal);
     }
     updateMode();
+    async function inspectBeforeActivation() {
+      if(activationBusy)return null;
+      activationBusy=true;
+      reportActivation('A analisar versões no Dropbox, sem alterar ficheiros…','progress',true);
+      try {
+        if(!oauth?.connected())throw new Error('Ligue primeiro a sua conta Dropbox.');
+        if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)
+          throw new Error('A conta autorizada foi alterada; inicie novamente a sessão.');
+        const report=await primary.previewDifferences();
+        renderConflicts(report.conflicts);
+        if(report.conflicts.length) {
+          reportActivation('Existem '+report.conflicts.length+' nota(s) com versões diferentes. Compare-as antes de ativar. Nenhuma nota foi substituída.','warning',true);
+        } else {
+          reportActivation('Sem divergências de conteúdo. '+report.missingLocal+
+            ' nota(s) disponíveis para recuperar do Dropbox; '+report.missingRemote+
+            ' nota(s) ainda por enviar após confirmação.','success',true);
+        }
+        return report;
+      } catch(err) {
+        reportActivation('Não foi possível verificar os conflitos: '+db.userMessage(err),'error',true);
+        return null;
+      } finally {
+        activationBusy=false;
+        updateMode(modeStatus.textContent);
+      }
+    }
     async function syncPrimary() {
       if (!primary.enabled()) return null;
       if (getCurrentOwner() !== owner || !root.NOTAS_PRIVATE?.authorized) {
@@ -175,24 +214,55 @@
       return result;
     }
     async function enablePrimary() {
-      if (!oauth?.connected()) throw new Error('Ligue primeiro a sua conta Dropbox');
-      if (getCurrentOwner() !== owner || !root.NOTAS_PRIVATE?.authorized) throw new Error('Conta não autorizada');
-      if (typeof prepareActivation !== 'function') throw new Error('Verificação prévia indisponível');
-      updateMode('A verificar cópias de segurança e a sincronização atual…');
-      await prepareActivation();
-      if (!root.confirm('Migrar cópias de todas as notas para o Dropbox como armazenamento principal? A versão atual e o Supabase serão preservados como backup, sem eliminar notas.')) {
-        updateMode();return;
-      }
-      updateMode('A copiar as notas para o Dropbox. Não feche a aplicação durante a primeira transferência.');
-      const preview = await primary.reconcile();
-      if (preview.conflicts.length) {
+      if(activationBusy)return false;
+      activationBusy=true;
+      reportActivation('A verificar versões no Dropbox antes de qualquer transferência…','progress',true);
+      try {
+        if(primary.enabled()) {
+          reportActivation('Dropbox já está ativo como armazenamento principal neste dispositivo.','success',true);
+          return true;
+        }
+        if(!oauth?.connected())throw new Error('Ligue primeiro a sua conta Dropbox.');
+        if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)
+          throw new Error('Conta não autorizada; inicie novamente a sessão.');
+        if(typeof prepareActivation!=='function')
+          throw new Error('A verificação das cópias de segurança está indisponível.');
+        const assessment=await primary.previewDifferences();
+        renderConflicts(assessment.conflicts);
+        if(assessment.conflicts.length) {
+          reportActivation('Ativação bloqueada: '+assessment.conflicts.length+
+            ' nota(s) com versões diferentes. Utilize «Comparar as duas versões». Nenhuma nota foi substituída.','warning',true);
+          return false;
+        }
+        reportActivation('A confirmar a sincronização e as cópias de segurança anteriores…','progress',true);
+        await prepareActivation();
+        if(!root.confirm('Migrar cópias de todas as notas para o Dropbox como armazenamento principal? A versão atual e o Supabase serão preservados como backup, sem eliminar notas.')) {
+          reportActivation('Ativação cancelada. Todas as notas continuam no armazenamento anterior.','info',true);
+          return false;
+        }
+        reportActivation('A copiar as notas para o Dropbox. Não feche a aplicação durante a primeira transferência.','progress',true);
+        const preview=await primary.reconcile();
         renderConflicts(preview.conflicts);
-        updateMode('Existem conflitos que precisam de revisão antes da ativação. Ambas as versões foram preservadas.');
-        return;
+        if(preview.conflicts.length) {
+          reportActivation('Ativação bloqueada: surgiram '+preview.conflicts.length+
+            ' divergência(s) durante a transferência. Nenhuma versão divergente foi substituída.','warning',true);
+          return false;
+        }
+        const result=await primary.enable();
+        if(!primary.enabled())throw new Error('O modo principal não foi confirmado pelo navegador.');
+        reportActivation('Dropbox principal ativado. '+result.pushed+
+          ' nota(s) enviadas nesta etapa; nenhuma nota local apagada.','success',true);
+        requestSync?.();
+        return true;
+      } catch(err) {
+        const message='Ativação não concluída: '+db.userMessage(err);
+        reportActivation(message,'error',true);
+        say(message);
+        return false;
+      } finally {
+        activationBusy=false;
+        updateMode(modeStatus.textContent);
       }
-      const result = await primary.enable();
-      updateMode('Dropbox principal ativado com ' + result.pushed + ' nota(s) enviadas. Nenhuma nota local foi apagada.');
-      requestSync?.();
     }
     function safeFolder() {
       const path = db.folderPath(folderInput.value.trim());
@@ -436,11 +506,17 @@
       ['dropbox-save',saveSelected],
       ['dropbox-recover',recoverSelected],
       ['dropbox-copy-link',copyLink],
+      ['dropbox-inspect-conflicts',inspectBeforeActivation],
       ['dropbox-enable-primary',enablePrimary],
       ['dropbox-sync-all',syncPrimary]
     ];
     for (const [id, action] of events) $(id).addEventListener('click', () => {
-      Promise.resolve().then(action).catch(err => say(db.userMessage(err)));
+      Promise.resolve().then(action).catch(err => {
+        const message=db.userMessage(err);
+        say(message);
+        if(id==='dropbox-enable-primary' || id==='dropbox-inspect-conflicts')
+          reportActivation('Operação não concluída: '+message,'error',true);
+      });
     });
     root.addEventListener('online', retryMapped);
     let lastForegroundSync=0;

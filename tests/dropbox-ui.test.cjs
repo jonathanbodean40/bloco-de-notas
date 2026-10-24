@@ -8,7 +8,7 @@ const raw = db.serialize(note,owner,'https://example.invalid/bloco/');
 const file = {'.tag':'file',name:db.noteFilename(note),path_display:db.notePath('/Notas Pro',note),rev:'synthetic-rev-1'};
 function widget() {
   return {
-    children:[], listeners:{}, value:'', textContent:'', disabled:false,
+    children:[], listeners:{}, dataset:{}, value:'', textContent:'', disabled:false,
     addEventListener(type,fn){(this.listeners[type] ||= []).push(fn);},
     async click(){for(const fn of [...(this.listeners.click || [])]) await fn();},
     append(...items){this.children.push(...items);},
@@ -17,14 +17,14 @@ function widget() {
     showModal(){this.open=true;},close(){this.open=false;}
   };
 }
-function harness(entry=file,body=raw,primaryOverride=null) {
+function harness(entry=file,body=raw,primaryOverride=null,options={}) {
   const elems = new Map(), store = new Map();
   const element = name => {
     if(!elems.has(name)) elems.set(name,widget());
     return elems.get(name);
   };
   const imported=[], opened=[];
-  globalThis.confirm=()=>true;
+  globalThis.confirm=options.confirm||(()=>true);
   store.set('notas-pro:dropbox-app-key:v1','publickey1234');
   store.set('notas-pro:dropbox-folder:v1:'+owner,'/Notas Pro');
   globalThis.document={getElementById:element,createElement:()=>widget()};
@@ -53,7 +53,7 @@ function harness(entry=file,body=raw,primaryOverride=null) {
   const instance=ui.create({
     owner,getNote:id=>imported.find(n=>n.id===id),
     getNotes:()=>imported,
-    applyRemote:()=>false,prepareActivation:async()=>true,requestSync:()=>{},
+    applyRemote:()=>false,prepareActivation:options.prepareActivation|| (async()=>true),requestSync:options.requestSync||(()=>{}),
     importNote:remote=>{
       if(imported.find(n=>n.id===remote.id))throw Error('Nota existente');
       imported.push(remote);
@@ -129,4 +129,127 @@ test('comparação de conflito mostra ambas as versões sem substituir notas',as
   assert.match(h.element('dropbox-status').textContent,/preservada como nota/);
   assert.equal(rows[1].removed,true);
   assert.equal(h.imported[0].content,local.content);
+});
+
+const nextTurn = () => new Promise(resolve=>setImmediate(resolve));
+
+test('verificação de conflitos não ativa Dropbox nem escreve notas',async()=>{
+  const operations=[];
+  const stub={Primary:class {
+    enabled(){return false;}
+    async previewDifferences(){operations.push('preview');return {
+      conflicts:[{id:note.id,message:'Duas versões diferentes'}],
+      missingLocal:0,missingRemote:0,pendingChanges:0
+    };}
+    async reconcile(){operations.push('WRITE_INCORRETO');throw Error('Não deve escrever');}
+  }};
+  const h=harness(file,raw,stub);
+  h.imported.push({...note});
+  await h.element('dropbox-inspect-conflicts').click();
+  await nextTurn();
+  assert.deepEqual(operations,['preview']);
+  assert.equal(h.element('dropbox-conflicts').children.length,2);
+  assert.match(h.element('dropbox-activation-feedback').textContent,/1 nota\(s\).*diferentes/);
+  assert.equal(h.element('dropbox-activation-feedback').dataset.state,'warning');
+  assert.equal(h.element('dropbox-enable-primary').disabled,false);
+  assert.deepEqual(h.imported,[note]);
+});
+
+test('ativar com divergência apresenta erro junto ao botão sem pedir aprovação ou escrever',async()=>{
+  const calls=[];
+  const stub={Primary:class {
+    enabled(){return false;}
+    async previewDifferences(){calls.push('preview');return {
+      conflicts:[{id:note.id,message:'Conflito de versões'}],
+      missingRemote:0,missingLocal:0
+    };}
+    async reconcile(){calls.push('write');throw Error('Não permitido');}
+    async enable(){calls.push('enable');throw Error('Não permitido');}
+  }};
+  const h=harness(file,raw,stub,{
+    prepareActivation:async()=>{calls.push('supabase');return true;},
+    confirm:()=>{calls.push('confirm');return true;}
+  });
+  h.imported.push({...note});
+  await h.element('dropbox-enable-primary').click();
+  await nextTurn();
+  assert.deepEqual(calls,['preview']);
+  assert.match(h.element('dropbox-primary-status').textContent,/Ativação bloqueada/);
+  assert.match(h.element('dropbox-activation-feedback').textContent,/Comparar as duas versões/);
+  assert.equal(h.element('dropbox-activation-feedback').dataset.state,'warning');
+  assert.equal(h.element('dropbox-enable-primary').disabled,false);
+});
+
+test('falha na verificação Supabase é visível perto do botão e pode ser repetida',async()=>{
+  const calls=[];
+  const stub={Primary:class {
+    enabled(){return false;}
+    async previewDifferences(){calls.push('preview');return {
+      conflicts:[],missingLocal:0,missingRemote:0
+    };}
+    async reconcile(){calls.push('write');throw Error('Não permitido');}
+  }};
+  const h=harness(file,raw,stub,{
+    prepareActivation:async()=>{calls.push('supabase');throw Error('A sincronização anterior não foi confirmada');},
+    confirm:()=>{calls.push('confirm');return true;}
+  });
+  await h.element('dropbox-enable-primary').click();
+  await nextTurn();
+  assert.deepEqual(calls,['preview','supabase']);
+  assert.equal(h.element('dropbox-activation-feedback').dataset.state,'error');
+  assert.match(h.element('dropbox-activation-feedback').textContent,/sincronização anterior não foi confirmada/);
+  assert.equal(h.element('dropbox-enable-primary').disabled,false);
+  assert.equal(h.element('dropbox-sync-all').disabled,true);
+});
+
+test('ativação sem conflitos mantém confirmação, preserva notas e mostra estado ativo',async()=>{
+  const calls=[];
+  let active=false;
+  const stub={Primary:class {
+    enabled(){return active;}
+    async previewDifferences(){calls.push('preview');return {
+      conflicts:[],missingLocal:1,missingRemote:1
+    };}
+    async reconcile(){calls.push('reconcile');return {conflicts:[],pushed:1,pulled:1};}
+    async enable(){calls.push('enable');active=true;return {conflicts:[],pushed:0,pulled:0};}
+  }};
+  const h=harness(file,raw,stub,{
+    prepareActivation:async()=>{calls.push('supabase');return true;},
+    confirm:()=>{calls.push('confirm');return true;},
+    requestSync:()=>calls.push('request-sync')
+  });
+  const existing={...note};
+  h.imported.push(existing);
+  await h.element('dropbox-enable-primary').click();
+  await nextTurn();
+  assert.deepEqual(calls.slice(0,5),['preview','supabase','confirm','reconcile','enable']);
+  assert.ok(calls.slice(5).length>=1);
+  assert.ok(calls.slice(5).every(item=>item==='request-sync'));
+  assert.equal(h.element('dropbox-enable-primary').disabled,true);
+  assert.equal(h.element('dropbox-sync-all').disabled,false);
+  assert.equal(h.element('dropbox-activation-feedback').dataset.state,'success');
+  assert.match(h.element('dropbox-activation-feedback').textContent,/principal ativado/);
+  assert.deepEqual(h.imported,[existing]);
+});
+
+test('dois toques rápidos nunca iniciam duas verificações de ativação',async()=>{
+  let checkCount=0;
+  let finishCheck;
+  const deferred=new Promise(resolve=>finishCheck=resolve);
+  const stub={Primary:class {
+    enabled(){return false;}
+    async previewDifferences(){checkCount++;return deferred;}
+    async reconcile(){throw Error('Não deve escrever');}
+  }};
+  const h=harness(file,raw,stub);
+  await Promise.all([
+    h.element('dropbox-enable-primary').click(),
+    h.element('dropbox-enable-primary').click()
+  ]);
+  await nextTurn();
+  assert.equal(checkCount,1);
+  assert.equal(h.element('dropbox-enable-primary').disabled,true);
+  finishCheck({conflicts:[{id:note.id,message:'Divergência'}],missingRemote:0,missingLocal:0});
+  await nextTurn();
+  assert.equal(h.element('dropbox-enable-primary').disabled,false);
 });

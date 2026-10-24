@@ -161,18 +161,40 @@ async function run() {
   const offline = await browser.newContext({viewport:{width:1000,height:850}});
   const op = await offline.newPage(); currentPage=op;
   await op.goto(base+'/?note=keep-demo-note&scope=keep-tool-demo'); await op.locator('.note-editor').waitFor();
-  await check('Cache nova contém os 12 recursos, incluindo a ferramenta, sem respostas da conta', async () => {
+  await check('Cache nova contém todos os recursos publicados sem guardar respostas privadas da conta', async () => {
+    const worker=fs.readFileSync(path.join(root,'service-worker.js'),'utf8');
+    const cacheVersion=worker.match(/const CACHE='([^']+)'/)?.[1];
+    const manifest=worker.match(/const FILES=\[([^\]]+)\]/)?.[1]||'';
+    const assetNames=[...manifest.matchAll(/'([^']+)'/g)].map(match=>match[1]);
+    assert.ok(cacheVersion && assetNames.length>=12,'Manifesto de cache inválido');
     await op.evaluate(async()=>{
       await navigator.serviceWorker.register('/service-worker.js');
       await navigator.serviceWorker.ready;
     });
-    await op.waitForFunction(async()=>{if(!await caches.has('notas-pro-v37-keep-aligner-tool'))return false;const c=await caches.open('notas-pro-v37-keep-aligner-tool');return(await c.keys()).length===12;});
-    const cached=await op.evaluate(async()=>{const c=await caches.open('notas-pro-v37-keep-aligner-tool');return(await c.keys()).map(r=>new URL(r.url).pathname);});
-    assert.equal(cached.length,12); assert(cached.includes('/keep-aligner-tool.js'));assert(cached.includes('/keep-aligner-tool.css'));
-    assert(!cached.some(p=>/auth|rest|notes-api/.test(p)));
-    for(const name of ['keep-aligner-tool.js','keep-aligner-tool.css','index.html']) {
-      const bytes=await op.evaluate(async name=>Array.from(new Uint8Array(await(await(await caches.open('notas-pro-v37-keep-aligner-tool')).match('/'+name)).arrayBuffer())),name);
-      assert.equal(crypto.createHash('sha256').update(Buffer.from(bytes)).digest('hex'),crypto.createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex'));
+    await op.waitForFunction(async({version,length})=>{
+      if(!await caches.has(version))return false;
+      const c=await caches.open(version);
+      return(await c.keys()).length===length;
+    },{version:cacheVersion,length:assetNames.length});
+    const cached=await op.evaluate(async version=>{
+      const c=await caches.open(version);
+      return(await c.keys()).map(r=>new URL(r.url).pathname);
+    },cacheVersion);
+    const expected=assetNames.map(name=>new URL(name,base+'/').pathname);
+    assert.deepEqual(cached.slice().sort(),expected.slice().sort(),'A cache corresponde exatamente ao manifesto publicado');
+    for(const required of ['/keep-aligner-tool.js','/keep-aligner-tool.css','/dropbox-feedback.css','/index.html'])
+      assert(cached.includes(required),'Recurso offline em falta: '+required);
+    assert(!cached.some(url=>/\/(?:auth|rest|notes-api)(?:\/|$)/.test(url)),
+      'A cache não deve guardar respostas de autenticação ou dados de conta');
+    for(const name of ['keep-aligner-tool.js','keep-aligner-tool.css','dropbox-feedback.css','index.html']) {
+      const bytes=await op.evaluate(async({name,version})=>{
+        const cached=await caches.open(version);
+        const response=await cached.match('/'+name);
+        if(!response)throw new Error('Asset offline em falta: '+name);
+        return Array.from(new Uint8Array(await response.arrayBuffer()));
+      },{name,version:cacheVersion});
+      assert.equal(crypto.createHash('sha256').update(Buffer.from(bytes)).digest('hex'),
+        crypto.createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex'));
     }
   });
   await check('A ferramenta abre offline e preserva a nota sintética', async () => {

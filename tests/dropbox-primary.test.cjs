@@ -452,3 +452,61 @@ test('não aceita a versão Dropbox se a revisão mudar durante a preservação 
   await assert.rejects(()=>b.engine.resolveWithRemote('race'),/mudou entretanto/);
   assert.equal(b.items.find(n=>n.id==='race').content,'Outra edição no POCO');
 });
+
+test('pré-verificação apenas lê e distingue conflitos, importações e novas notas',async()=>{
+  const cloud=new FakeDropbox();
+  const seed=[
+    basic('same','<p>Igual</p>'),
+    basic('conflict','<p>Versão Dropbox</p>'),
+    basic('remote-only','<p>Só no Dropbox</p>')
+  ];
+  const remote=device(cloud,seed);
+  await remote.engine.enable();
+  const local=device(cloud,[
+    basic('same','<p>Igual</p>'),
+    basic('conflict','<p>Versão POCO divergente</p>','2026-10-24T10:00:00.000Z'),
+    basic('local-only','<p>Só no POCO</p>')
+  ]);
+  const beforeFiles=clone([...cloud.files.entries()]);
+  const beforeItems=clone(local.items);
+  const beforeStore=local.local.snapshot();
+  const result=await local.engine.previewDifferences();
+  assert.deepEqual(result.conflicts.map(c=>c.id),['conflict']);
+  assert.equal(result.missingLocal,1);
+  assert.equal(result.missingRemote,1);
+  assert.equal(result.indexMissing,false);
+  assert.deepEqual(clone([...cloud.files.entries()]),beforeFiles,'Nenhum ficheiro Dropbox alterado');
+  assert.deepEqual(local.items,beforeItems,'Nenhuma nota importada ou modificada');
+  assert.deepEqual(local.local.snapshot(),beforeStore,'Nenhum checkpoint escrito na análise');
+});
+test('pré-verificação sem índice central não cria pasta nem dados',async()=>{
+  const cloud=new FakeDropbox();
+  const local=device(cloud,[basic('only-local','<p>Teste</p>')]);
+  const result=await local.engine.previewDifferences();
+  assert.equal(result.missingRemote,1);
+  assert.equal(result.indexMissing,true);
+  assert.deepEqual(result.conflicts,[]);
+  assert.equal(cloud.files.size,0);
+  assert.equal(cloud.folders.size,1);
+});
+test('pré-verificação distingue revisão remota nova de edição local pendente',async()=>{
+  const cloud=new FakeDropbox();
+  const a=device(cloud,[basic('n1','Antes')]);
+  await a.engine.enable();
+  const b=device(cloud);
+  await b.engine.reconcile();
+  // The local note is unchanged since it last saw this revision.
+  a.items[0].content='Atualização remota';
+  a.items[0].updatedAt='2026-10-24T10:00:00.000Z';
+  await a.engine.reconcile();
+  const oldCloud=clone([...cloud.files.entries()]);
+  const first=await b.engine.previewDifferences();
+  assert.equal(first.conflicts.length,0);
+  assert.equal(first.pendingChanges,1);
+  assert.deepEqual(clone([...cloud.files.entries()]),oldCloud);
+  // A true simultaneous edit still blocks and is not automatically resolved.
+  b.items[0].content='Alteração incompatível no POCO';
+  b.items[0].updatedAt='2026-10-24T10:01:00.000Z';
+  const second=await b.engine.previewDifferences();
+  assert.deepEqual(second.conflicts.map(c=>c.id),['n1']);
+});

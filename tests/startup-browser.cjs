@@ -14,12 +14,15 @@ const root = path.resolve(__dirname, '..');
 const outputDir = path.resolve(root, '..', 'verification');
 const baselineRef = process.env.BASELINE_REF || '144b247';
 const assetDelayMs = Number(process.env.APP_SCRIPT_DELAY_MS || 180);
-const publicFiles = ['index.html', 'style.css', 'private-access.js', 'app.js', 'spell-worker.js', 'icon.svg', 'manifest.webmanifest'];
+const publicFiles = ['index.html', 'style.css', 'dropbox-feedback.css', 'private-access.js', 'app.js', 'spell-worker.js', 'icon.svg', 'manifest.webmanifest'];
 const additionalPublic = ['dropbox-storage.js', 'dropbox-token-vault.js', 'dropbox-oauth.js', 'dropbox-primary.js', 'dropbox-ui.js'];
 const sources = {current: {}, baseline: {}};
 for (const name of publicFiles) {
   sources.current[name] = fs.readFileSync(path.join(root, name));
-  sources.baseline[name] = execFileSync('git', ['show', `${baselineRef}:${name}`], {cwd: root, maxBuffer: 12 * 1024 * 1024});
+  // This stylesheet was introduced after the historical baseline and is
+  // only referenced by the current version of the application.
+  if(name!=='dropbox-feedback.css')
+    sources.baseline[name] = execFileSync('git', ['show', `${baselineRef}:${name}`], {cwd: root, maxBuffer: 12 * 1024 * 1024});
 }
 for(const name of additionalPublic) sources.current[name] = fs.readFileSync(path.join(root, name));
 const sha256 = data => crypto.createHash('sha256').update(data).digest('hex');
@@ -336,6 +339,44 @@ async function verifyPrimaryMode(page) {
   await page.locator('#dropbox-btn').click();
   await page.locator('#dropbox-browse').click();
   await page.waitForFunction(()=>document.querySelector('#dropbox-status').textContent.startsWith('Pasta:'));
+  // Reproduce the POCO report: activation was silently blocked by a conflict,
+  // with the old error message outside the user's visible mobile viewport.
+  await page.setViewportSize({width:393,height:852});
+  await page.evaluate(()=>{
+    const proto=window.NotasDropboxPrimary.Primary.prototype;
+    window.__originalPreviewDifferences=proto.previewDifferences;
+    proto.previewDifferences=async()=>{
+      return {
+        conflicts:[{id:'synthetic-note-a',message:'Duas versões diferentes'}],
+        missingLocal:0,missingRemote:0,pendingChanges:0
+      };
+    };
+  });
+  await page.locator('#dropbox-inspect-conflicts').click();
+  await page.waitForFunction(()=>document.querySelector('#dropbox-activation-feedback').dataset.state==='warning');
+  check(await page.locator('#dropbox-activation-feedback').isVisible(),
+    'dropbox-primary: read-only conflict status is visible in mobile layout');
+  check(await page.evaluate(()=>window.__dropboxSynthetic.files.size===0),
+    'dropbox-primary: read-only verification does not write any Dropbox file');
+  await page.locator('#dropbox-enable-primary').click();
+  await page.waitForFunction(()=>document.querySelector('#dropbox-activation-feedback').textContent.includes('Ativação bloqueada'));
+  const activationWarning=await page.locator('#dropbox-activation-feedback').evaluate(el=>{
+    const rect=el.getBoundingClientRect();
+    return {visible:rect.top>=0&&rect.bottom<=window.innerHeight+4,
+      warning:el.dataset.state==='warning',text:el.textContent};
+  });
+  check(activationWarning.warning&&activationWarning.visible,
+    'dropbox-primary: failed activation gives visible warning beside button on 393px mobile');
+  check(await page.evaluate(()=>window.__dropboxSynthetic.files.size===0),
+    'dropbox-primary: blocked activation never migrates or deletes synthetic notes');
+  check(await page.locator('#dropbox-enable-primary').isEnabled(),
+    'dropbox-primary: activation button is re-enabled after a block');
+  await page.evaluate(()=>{
+    const proto=window.NotasDropboxPrimary.Primary.prototype;
+    proto.previewDifferences=window.__originalPreviewDifferences;
+    delete window.__originalPreviewDifferences;
+  });
+  await page.setViewportSize({width:1280,height:800});
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#dropbox-enable-primary').click();
   await page.waitForFunction(()=>localStorage.getItem('notas-pro:dropbox-primary:v1:synthetic-owner')==='1',{timeout:15000});
