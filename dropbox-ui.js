@@ -3,7 +3,7 @@
  */
 (function (root) {
   'use strict';
-  function create({owner, getNote, getNotes, importNote, applyRemote, ensureSaved, prepareActivation, requestSync, getActiveId, getCurrentOwner, openNote, currentUrl}) {
+  function create({owner, getNote, getNotes, importNote, applyRemote, adoptRemote, ensureSaved, prepareActivation, requestSync, getActiveId, getCurrentOwner, openNote, currentUrl}) {
     if (!root.NotasDropboxStorage || !root.NotasDropboxOAuth || !root.NotasDropboxPrimary) throw new Error('Módulos Dropbox indisponíveis');
     const db = root.NotasDropboxStorage;
     const Auth = root.NotasDropboxOAuth.DropboxOAuth;
@@ -47,13 +47,16 @@
     }
     const primary = new root.NotasDropboxPrimary.Primary({
       owner, client, getNotes,
-      importNote, applyRemote, storage:localStorage
+      importNote, applyRemote, adoptRemote, storage:localStorage
     });
     const modeStatus = $('dropbox-primary-status');
     const conflictList = $('dropbox-conflicts');
     function renderConflicts(conflicts) {
       conflictList.replaceChildren();
-      if (!Array.isArray(conflicts)) return;
+      if (!Array.isArray(conflicts) || !conflicts.length) return;
+      const summary=document.createElement('p');
+      summary.textContent=conflicts.length+' nota(s) com divergências por analisar. Nenhuma foi substituída.';
+      conflictList.append(summary);
       for (const conflict of conflicts) {
         const title = getNotes().find(n => n.id === conflict.id)?.title || 'Sem título';
         const row = document.createElement('div');
@@ -84,15 +87,16 @@
               .replace(/&gt;/g,'>')
               .replace(/\s+/g,' ').trim().slice(0,1400);
             for (const [caption,note] of [
-              ['Edição guardada neste MSI',versions.local],
+              ['Edição guardada neste dispositivo',versions.local],
               ['Versão existente no Dropbox',versions.remote]
             ]) {
               const wrapper=document.createElement('section');
               const h=document.createElement('strong');
               h.textContent=caption;
               const date=document.createElement('p');
-              date.textContent='Data registada: '+(note.updatedAt||'desconhecida') +
-                ' · ' + String(note.content||'').length + ' caracteres de conteúdo';
+              date.textContent='Estado: '+(note.deletedAt?'Eliminada':'Ativa')+
+                ' · Data registada: '+(note.updatedAt||'desconhecida')+
+                ' · '+String(note.content||'').length+' caracteres de conteúdo';
               const body=document.createElement('pre');
               body.textContent=plainText(note) || '[Conteúdo sem texto simples ou apenas elementos gráficos]';
               wrapper.append(h,date,body);preview.append(wrapper);
@@ -110,7 +114,7 @@
           if (getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized) {
             say('A sessão foi alterada; entre novamente antes de resolver o conflito.');return;
           }
-          if (!root.confirm('Guardar PRIMEIRO uma cópia separada da versão Dropbox e só DEPOIS manter a edição do MSI na nota original? Ambas as versões ficarão guardadas na nuvem e no dispositivo.')) return;
+          if (!root.confirm('Guardar PRIMEIRO uma cópia separada da versão Dropbox e só DEPOIS manter a edição deste dispositivo na nota original? Ambas as versões ficarão guardadas na nuvem e no dispositivo.')) return;
           action.disabled = true;
           try {
             const resolved = await primary.resolveWithLocal(conflict.id);
@@ -122,7 +126,26 @@
             say('Não foi possível resolver: ' + (err.message || 'versão alterada'));
           }
         });
-        row.append(label,inspect,preview,action); conflictList.append(row);
+        const chooseDropbox=document.createElement('button');
+        chooseDropbox.type='button';
+        chooseDropbox.textContent='Manter versão Dropbox e guardar esta edição como cópia';
+        chooseDropbox.addEventListener('click',async()=>{
+          if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized) {
+            say('A sessão foi alterada; entre novamente antes de resolver o conflito.');return;
+          }
+          if(!root.confirm('Guardar PRIMEIRO uma cópia separada da versão deste dispositivo no Dropbox e SÓ DEPOIS utilizar a versão Dropbox como principal? Nada será apagado.'))return;
+          chooseDropbox.disabled=true;
+          try {
+            const result=await primary.resolveWithRemote(conflict.id);
+            row.remove();
+            say('Conflito resolvido: cópia deste dispositivo preservada como nota '+result.backupId+'.');
+            requestSync?.();
+          } catch(err){
+            chooseDropbox.disabled=false;
+            say('Não foi possível resolver: '+(err?.message||'operação interrompida'));
+          }
+        });
+        row.append(label,inspect,preview,action,chooseDropbox); conflictList.append(row);
       }
     }
     function updateMode(message) {

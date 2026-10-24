@@ -47,6 +47,33 @@
     return hashValue([n.id,n.title,n.titleHtml,n.content,
       normalizedDate(n.updatedAt),normalizedDate(n.deletedAt)]);
   }
+  function equivalentContent(content) {
+    // An aligner note keeps viewport geometry in data-layout. These two fields
+    // are device/window-specific and may change without an edit to the note.
+    // Keep ALL other fields and the entire note body byte-for-byte.
+    return String(content).replace(/data-layout="([^"]*)"/, (full,attribute) => {
+      let layout;
+      try {
+        layout=JSON.parse(attribute.replace(/&quot;|&#34;/g,'"')
+          .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>'));
+      } catch (_) { return full; }
+      if(!layout || typeof layout!=='object' || Array.isArray(layout))return full;
+      const stable={...layout};
+      delete stable.rect;
+      delete stable.popupRect;
+      const escaped=JSON.stringify(stable)
+        .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+        .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return 'data-layout="'+escaped+'"';
+    });
+  }
+  async function semanticFingerprint(note) {
+    const n=checkNote(note);
+    // Same note contents are equivalent even with a different save instant
+    // or local window dimensions. Deleted vs active is NEVER equivalent.
+    return hashValue([n.id,n.title==='Sem título'?'':n.title,
+      n.titleHtml,equivalentContent(n.content),Boolean(n.deletedAt)]);
+  }
   async function fingerprintLegacy(note) {
     const n=checkNote(note);
     return hashValue([n.id,n.title,n.titleHtml,n.content,n.updatedAt,n.deletedAt]);
@@ -60,11 +87,12 @@
     return normalizedDate(note.updatedAt)===normalizedDate(known.syncedAt);
   }
   class Primary {
-    constructor({owner,client,getNotes,importNote,applyRemote,storage}) {
+    constructor({owner,client,getNotes,importNote,applyRemote,adoptRemote,storage}) {
       if(!owner||typeof client!=='function'||typeof getNotes!=='function'||
         typeof importNote!=='function'||typeof applyRemote!=='function')throw new Error('Integração Dropbox incompleta');
       this.owner=owner;this.client=client;this.getNotes=getNotes;
       this.importNote=importNote;this.applyRemote=applyRemote;
+      this.adoptRemote=adoptRemote||null;
       this.storage=storage||root.localStorage;
       this.mapKey=MAP_KEY+owner;
       this.itemKey=this.mapKey+':note:';
@@ -226,24 +254,41 @@
               }
               result.unchanged++;continue;
             }
+            // Resizing a window or representing the same note at another
+            // screen resolution is not a content edit; do not upload it.
+            const remote=await this.readNote(entry,id);
+            if(await semanticFingerprint(local)===await semanticFingerprint(remote)) {
+              map[id]={path:entry.path,rev:entry.rev,hash:localHash,syncedAt:local.updatedAt};
+              this.saveMap(map,id);
+              result.unchanged++;continue;
+            }
             await this.upload(local,entry,folder,map);result.pushed++;continue;
           }
           // Remote changed. Pull only if local remains exactly as it was last synced.
           const remote=await this.readNote(entry,id);
           const remoteHash=await fingerprint(remote);
+          let checkpointHash=remoteHash,checkpointDate=remote.updatedAt;
           if(!local) {
             if(!this.importNote(remote))throw conflict('A importação desta nota foi recusada');
             result.pulled++;
           } else {
             const localHash=await fingerprint(local);
             if(localHash!==remoteHash) {
-              const clean=await matchesCheckpoint(local,known,localHash);
-              if(!clean)throw conflict('Alterações diferentes em dois dispositivos; requer revisão');
-              if(!this.applyRemote(remote,local))throw conflict('A nota local tem alterações por guardar ou uma versão mais recente');
-              result.pulled++;
+              if(await semanticFingerprint(local)===await semanticFingerprint(remote)) {
+                // Same visible note, but different window geometry or dates.
+                // Keep both representations and checkpoint the local version.
+                checkpointHash=localHash;
+                checkpointDate=local.updatedAt;
+                result.unchanged++;
+              } else {
+                const clean=await matchesCheckpoint(local,known,localHash);
+                if(!clean)throw conflict('Alterações diferentes em dois dispositivos; requer revisão');
+                if(!this.applyRemote(remote,local))throw conflict('A nota local tem alterações por guardar ou uma versão mais recente');
+                result.pulled++;
+              }
             } else result.unchanged++;
           }
-          map[id]={path:entry.path,rev:entry.rev,hash:remoteHash,syncedAt:remote.updatedAt};
+          map[id]={path:entry.path,rev:entry.rev,hash:checkpointHash,syncedAt:checkpointDate};
           this.saveMap(map,id);
         }catch(err) {
           if(err.code!=='DROPBOX_CONFLICT')throw err;
@@ -319,7 +364,9 @@
         id:root.crypto.randomUUID(),
         title:'Cópia da versão Dropbox - '+(compared.remote.title||'Sem título'),
         updatedAt:new Date().toISOString(),
-        deletedAt:null
+        // A remotely deleted/purged note must remain deleted in its safety copy.
+        // Resurrecting a purged tombstone creates a confusing empty live note.
+        deletedAt:compared.remote.deletedAt || null
       };
       if(!this.importNote(backup)) throw new Error('Não foi possível guardar localmente a cópia da nuvem');
       // Store a separately indexed Dropbox copy BEFORE replacing the existing version.
@@ -336,6 +383,45 @@
       }
       await this.upload(savedNow,entry,DEFAULT_FOLDER,this.readMap());
       return {backupId:backup.id,noteId:id};
+    }
+    async resolveWithRemote(id) {
+      if(typeof this.adoptRemote!=='function')
+        throw new Error('A atualização segura da nota local não está disponível');
+      const compared=await this.inspectConflict(id);
+      if(compared.localHash===compared.remoteHash)
+        throw new Error('As versões já são iguais. Sincronize novamente.');
+      const preserved={
+        ...compared.local,
+        id:root.crypto.randomUUID(),
+        title:'Cópia deste dispositivo - '+(compared.local.title||'Sem título'),
+        updatedAt:new Date().toISOString(),
+        deletedAt:compared.local.deletedAt||null
+      };
+      // Never replace a local original until its content is separately
+      // saved both on this device and in the central Dropbox index.
+      if(!this.importNote(preserved))
+        throw new Error('Não foi possível guardar uma cópia da versão local');
+      await this.upload(preserved,null,DEFAULT_FOLDER,this.readMap());
+      const current=this.getNotes().find(n=>n.id===id);
+      if(!current || await fingerprint(current)!==compared.localHash)
+        throw conflict('A nota local foi alterada entretanto. A cópia está segura, mas a original foi mantida.');
+      const {index}=await this.readIndex(false);
+      const still=index?.entries?.[id];
+      if(!still || still.rev!==compared.remoteRevision)
+        throw conflict('A versão Dropbox mudou entretanto. Foi preservada uma cópia da nota local.');
+      // Non-primary devices may still synchronize via Supabase. Giving the
+      // explicitly adopted remote copy a fresh local timestamp prevents an
+      // older Supabase row from resurrecting the overwritten local version.
+      const now=new Date(Math.max(Date.now(),
+        Date.parse(current.updatedAt)+1,Date.parse(compared.remote.updatedAt)+1)).toISOString();
+      const adopted={...compared.remote,updatedAt:now};
+      if(!this.adoptRemote(adopted,current))
+        throw conflict('Não foi possível aplicar a versão Dropbox. A cópia local foi preservada.');
+      const map=this.readMap();
+      map[id]={path:still.path,rev:still.rev,
+        hash:await fingerprint(adopted),syncedAt:adopted.updatedAt};
+      this.saveMap(map,id);
+      return {backupId:preserved.id,noteId:id};
     }
     async enable() {
       const result=await this.reconcile();

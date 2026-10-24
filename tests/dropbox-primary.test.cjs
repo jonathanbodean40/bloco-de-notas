@@ -63,6 +63,11 @@ function device(cloud,seed=[],sharedStorage=null) {
          Date.parse(remote.updatedAt)<=Date.parse(expected.updatedAt))return false;
       items[idx]=clone(remote);return true;
     },
+    adoptRemote:(remote,expected)=>{
+      const idx=items.findIndex(n=>n.id===expected.id);
+      if(idx<0||items[idx].updatedAt!==expected.updatedAt)return false;
+      items[idx]=clone(remote);return true;
+    },
     storage:local
   });
   return {items,local,engine};
@@ -288,4 +293,162 @@ test('dados remotos divergentes impedem ativar Dropbox como principal',async()=>
   await assert.rejects(()=>b.engine.enable(),err=>err.code==='DROPBOX_CONFLICT');
   assert.equal(b.engine.enabled(),false);
   assert.equal(b.items[0].content,'POCO');
+});
+
+function noteHtml({body='<p>Texto original</p>',rect={x:14,y:14,w:400,h:600},popupRect={x:0,y:0,w:400,h:600},objects=[],shipments=[]}={}) {
+  const layout={bg:'#ffffff',textWidth:100,objects,kind:'normal',onyxRows:[],shipments,folders:[],location:null,rect,popupRect};
+  const escaped=JSON.stringify(layout).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  return '<div data-notas-pro="3" data-layout="'+escaped+'"><div data-note-body="">'+body+'</div></div>';
+}
+test('migração POCO evita conflitos causados apenas pelo tamanho das janelas',async()=>{
+  const cloud=new FakeDropbox();
+  const previous=basic('geometry',noteHtml({rect:{x:10,y:10,w:850,h:590},popupRect:{w:910,h:740}}),'2026-10-23T09:00:00Z');
+  const mobile={...previous,content:noteHtml({rect:{x:0,y:0,w:340,h:620},popupRect:{w:390,h:844}}),updatedAt:'2026-10-24T00:56:00Z'};
+  const msi=device(cloud,[previous]);await msi.engine.enable();
+  const rev=JSON.parse(cloud.files.get(INDEX).body).entries.geometry.rev;
+  const poco=device(cloud,[mobile]);
+  const migrated=await poco.engine.enable();
+  assert.equal(migrated.conflicts.length,0);
+  assert.equal(migrated.pushed,0);
+  assert.equal(poco.engine.enabled(),true);
+  assert.equal(JSON.parse(cloud.files.get(INDEX).body).entries.geometry.rev,rev);
+  assert.equal(poco.items[0].content,mobile.content,'Layout local preservado no POCO');
+  const repeated=await poco.engine.reconcile();
+  assert.equal(repeated.conflicts.length,0);
+  assert.equal(repeated.pushed,0,'Não faz upload desnecessário após reiniciar');
+});
+test('mudança genuína de texto continua a gerar conflito mesmo com geometria diferente',async()=>{
+  const cloud=new FakeDropbox();
+  const a=device(cloud,[basic('different-text',noteHtml({body:'<p>Texto do MSI</p>'}))]);
+  await a.engine.enable();
+  const b=device(cloud,[basic('different-text',noteHtml({body:'<p>Texto novo do POCO</p>',rect:{w:300,h:630}}),'2026-10-24T01:00:00Z')]);
+  const result=await b.engine.reconcile();
+  assert.equal(result.conflicts.length,1);
+  assert.equal(b.items[0].content.includes('Texto novo do POCO'),true);
+  assert.equal(db.deserialize(cloud.files.get(JSON.parse(cloud.files.get(INDEX).body).entries['different-text'].path).body,owner).content.includes('Texto do MSI'),true);
+});
+test('mudança de objetos clínicos preservados no layout NÃO é ignorada',async()=>{
+  const cloud=new FakeDropbox();
+  const note=basic('objects',noteHtml({objects:[{type:'label',text:'Texto A'}]}));
+  const a=device(cloud,[note]);await a.engine.enable();
+  const altered={...note,content:noteHtml({objects:[{type:'label',text:'Texto B'}],rect:{x:1,y:2,w:350,h:700}})};
+  const b=device(cloud,[altered]);
+  assert.equal((await b.engine.reconcile()).conflicts.length,1);
+});
+test('duas lápides de exclusão idênticas não ressuscitam notas nem geram conflito',async()=>{
+  const cloud=new FakeDropbox();
+  const original={...basic('purged','<div data-notas-purged="1"></div>'),'deletedAt':'2026-09-22T09:51:40.342Z',
+    updatedAt:'2026-10-09T18:07:55.248Z'};
+  const a=device(cloud,[original]);await a.engine.enable();
+  const poco=device(cloud,[{...original,deletedAt:'2026-09-21T09:51:40.342+00:00',
+    updatedAt:'2026-10-24T00:45:00Z'}]);
+  const check=await poco.engine.reconcile();
+  assert.equal(check.conflicts.length,0);
+  assert.equal(check.pushed,0);
+  assert.ok(poco.items[0].deletedAt);
+  assert.equal(JSON.parse(cloud.files.get(INDEX).body).entries.purged.deletedAt,original.deletedAt);
+});
+test('não confunde nota ativa e nota eliminada mesmo quando o conteúdo é igual',async()=>{
+  const cloud=new FakeDropbox();
+  const original=basic('live-or-deleted','<p>Dados</p>');
+  const a=device(cloud,[original]);await a.engine.enable();
+  const b=device(cloud,[{...original,deletedAt:'2026-10-23T11:00:00Z'}]);
+  const r=await b.engine.reconcile();
+  assert.equal(r.conflicts.length,1);
+  assert.equal(b.items[0].deletedAt,'2026-10-23T11:00:00Z');
+});
+test('resolução mantém lápide remota como cópia eliminada, sem criar nota ativa vazia',async()=>{
+  const cloud=new FakeDropbox();
+  const remote={...basic('old-del','<div data-notas-purged="1"></div>'),'deletedAt':'2026-09-22T09:51:40.342Z'};
+  const a=device(cloud,[remote]);await a.engine.enable();
+  const local={...remote,content:'<p>Recuperado no POCO</p>',deletedAt:null,updatedAt:'2026-10-24T01:00:00Z'};
+  const b=device(cloud,[local]);
+  const before=(await b.engine.reconcile());
+  assert.equal(before.conflicts.length,1);
+  const resolution=await b.engine.resolveWithLocal('old-del');
+  const safety=b.items.find(n=>n.id===resolution.backupId);
+  assert.ok(safety.deletedAt,'Cópia mantém estado de eliminação');
+  const idx=JSON.parse(cloud.files.get(INDEX).body);
+  assert.ok(idx.entries[resolution.backupId].deletedAt);
+  assert.equal(db.deserialize(cloud.files.get(idx.entries['old-del'].path).body,owner).content,local.content);
+});
+
+test('utilizador pode manter versão Dropbox e preservar integralmente edição local como nova nota',async()=>{
+  const cloud=new FakeDropbox();
+  const original=basic('choose-remote','<p>Remoto</p>','2026-10-23T10:00:00Z');
+  const msi=device(cloud,[original]); await msi.engine.enable();
+  const local={...original,content:'<p>Texto diferente no POCO</p>',updatedAt:'2026-10-24T01:00:00Z'};
+  const poco=device(cloud,[local]);
+  assert.equal((await poco.engine.reconcile()).conflicts.length,1);
+  const oldIndex=JSON.parse(cloud.files.get(INDEX).body);
+  const originalRev=oldIndex.entries['choose-remote'].rev;
+  const done=await poco.engine.resolveWithRemote('choose-remote');
+  const localBackup=poco.items.find(n=>n.id===done.backupId);
+  assert.ok(localBackup);
+  assert.equal(localBackup.content,local.content);
+  const newIndex=JSON.parse(cloud.files.get(INDEX).body);
+  assert.equal(newIndex.entries['choose-remote'].rev,originalRev,'Versão Dropbox não foi substituída');
+  assert.equal(db.deserialize(cloud.files.get(newIndex.entries[done.backupId].path).body,owner).content,local.content);
+  assert.equal(poco.items.find(n=>n.id==='choose-remote').content,original.content);
+  assert.ok(Date.parse(poco.items.find(n=>n.id==='choose-remote').updatedAt)>Date.parse(local.updatedAt));
+  const after=await poco.engine.reconcile();
+  assert.equal(after.conflicts.length,0);
+  assert.equal(after.pushed,0);
+});
+test('quando Dropbox eliminou nota, a escolha remota mantém a eliminação e preserva conteúdo local',async()=>{
+  const cloud=new FakeDropbox();
+  const remote={...basic('choose-tombstone','<div data-notas-purged="1"></div>'),'deletedAt':'2026-09-22T09:51:40.342Z'};
+  const a=device(cloud,[remote]);await a.engine.enable();
+  const prior={...remote,content:'<p>Texto que estava ativo no POCO</p>',deletedAt:null,updatedAt:'2026-10-24T01:00:00Z'};
+  const b=device(cloud,[prior]);
+  assert.equal((await b.engine.reconcile()).conflicts.length,1);
+  const result=await b.engine.resolveWithRemote('choose-tombstone');
+  const original=b.items.find(n=>n.id==='choose-tombstone');
+  const copy=b.items.find(n=>n.id===result.backupId);
+  assert.ok(original.deletedAt,'A nota eliminada continua eliminada');
+  assert.equal(copy.content,prior.content,'Conteúdo local guardado');
+  assert.equal(copy.deletedAt,null,'Backup do conteúdo ativo continua acessível');
+  assert.equal((await b.engine.reconcile()).conflicts.length,0);
+});
+test('falha ao fazer upload do backup local impede substituir a edição do dispositivo',async()=>{
+  const cloud=new FakeDropbox();
+  const remote=basic('fail-local-copy','Remoto');
+  const a=device(cloud,[remote]);await a.engine.enable();
+  const local={...remote,content:'Local',updatedAt:'2026-10-24T01:00:00Z'};
+  const b=device(cloud,[local]);
+  const cloudUpload=cloud.upload.bind(cloud);
+  cloud.upload=async(path,body,revision)=>{
+    if(path.endsWith('.keepnote.json')&&!revision)
+      throw cloud.error(503,'Falha sintética durante backup local');
+    return cloudUpload(path,body,revision);
+  };
+  await assert.rejects(()=>b.engine.resolveWithRemote('fail-local-copy'),/Falha sintética/);
+  assert.equal(b.items.find(n=>n.id==='fail-local-copy').content,'Local');
+  const index=JSON.parse(cloud.files.get(INDEX).body);
+  assert.equal(db.deserialize(cloud.files.get(index.entries['fail-local-copy'].path).body,owner).content,'Remoto');
+  assert.ok(b.items.some(n=>n.id!=='fail-local-copy'&&n.content==='Local'),'Cópia local ainda existe');
+});
+test('não aceita a versão Dropbox se a revisão mudar durante a preservação da cópia',async()=>{
+  const cloud=new FakeDropbox();
+  const remote=basic('race','Versão remota inicial');
+  const a=device(cloud,[remote]);await a.engine.enable();
+  const local={...remote,content:'Outra edição no POCO',updatedAt:'2026-10-24T01:00:00Z'};
+  const b=device(cloud,[local]);
+  const originalUpload=cloud.upload.bind(cloud);
+  let changed=false;
+  cloud.upload=async(path,body,rev)=>{
+    const result=await originalUpload(path,body,rev);
+    if(!changed && path.endsWith('.keepnote.json') && !rev && !path.includes('--race.')) {
+      changed=true;
+      const entry=JSON.parse(cloud.files.get(INDEX).body).entries.race;
+      const newNote={...remote,content:'Remoto atualizado entretanto',updatedAt:'2026-10-24T02:00:00Z'};
+      const metadata=await originalUpload(entry.path,db.serialize(newNote,owner,'https://example.invalid'),entry.rev);
+      const manifest=JSON.parse(cloud.files.get(INDEX).body);
+      manifest.entries.race.rev=metadata.rev;
+      await originalUpload(INDEX,JSON.stringify(manifest),cloud.files.get(INDEX).rev);
+    }
+    return result;
+  };
+  await assert.rejects(()=>b.engine.resolveWithRemote('race'),/mudou entretanto/);
+  assert.equal(b.items.find(n=>n.id==='race').content,'Outra edição no POCO');
 });

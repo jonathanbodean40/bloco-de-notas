@@ -318,12 +318,13 @@
     renderNotes();
     return true;
   }
-  function applyDropboxRemote(note, expected) {
+  function applyDropboxRemote(note, expected, forceAfterBackup = false) {
     if (!privateAccess.authorized || !user || !note || !expected || note.id !== expected.id) return false;
     const current = notes.find(n => n.id === expected.id);
     const stored = loadNotes(storageKey()).find(n => n.id === expected.id);
     if (!current || !stored || current.updatedAt !== expected.updatedAt ||
-        stored.updatedAt !== expected.updatedAt || Date.parse(note.updatedAt) <= Date.parse(expected.updatedAt)) return false;
+        stored.updatedAt !== expected.updatedAt ||
+        (!forceAfterBackup && Date.parse(note.updatedAt) <= Date.parse(expected.updatedAt))) return false;
     const w = windows.get(note.id);
     if (w?.dirty) return false;
     const previousNotes = notes;
@@ -340,6 +341,7 @@
     }
     if(detached&&!active&&detachedId===note.id&&!note.deletedAt)restoreWorkspace();
     renderNotes();
+    if(forceAfterBackup) scheduleSync(); // propagate the explicit choice to the Supabase safety copy
     return true;
   }
   function closeNote(w){if(!canDiscard(w))return;w.dirty=false;if(detached&&mobileNotes){const url=new URL(location.href);url.search='';url.hash='';location.assign(url.href);}else if(detached)window.close();else{removeWindow(w);openSidebar();}}
@@ -1032,6 +1034,7 @@
       getNotes: () => notes.map(n => ({...n})),
       importNote: note => importDropboxNote(note, true),
       applyRemote: applyDropboxRemote,
+      adoptRemote: (note, expected) => applyDropboxRemote(note, expected, true),
       requestSync: scheduleSync,
       prepareActivation: async () => {
         if ([...windows.values()].some(w => w.dirty)) throw new Error('Guarde todas as alterações antes da migração para Dropbox.');
