@@ -14,14 +14,14 @@ const root = path.resolve(__dirname, '..');
 const outputDir = path.resolve(root, '..', 'verification');
 const baselineRef = process.env.BASELINE_REF || '144b247';
 const assetDelayMs = Number(process.env.APP_SCRIPT_DELAY_MS || 180);
-const publicFiles = ['index.html', 'style.css', 'dropbox-feedback.css', 'private-access.js', 'app.js', 'spell-worker.js', 'icon.svg', 'manifest.webmanifest'];
-const additionalPublic = ['dropbox-storage.js', 'dropbox-token-vault.js', 'dropbox-oauth.js', 'dropbox-primary.js', 'dropbox-ui.js'];
+const publicFiles = ['index.html', 'style.css', 'dropbox-feedback.css', 'notes-extras.css', 'private-access.js', 'app.js', 'spell-worker.js', 'icon.svg', 'manifest.webmanifest'];
+const additionalPublic = ['dropbox-storage.js', 'dropbox-token-vault.js', 'dropbox-oauth.js', 'dropbox-primary.js', 'note-export.js', 'dropbox-ui.js'];
 const sources = {current: {}, baseline: {}};
 for (const name of publicFiles) {
   sources.current[name] = fs.readFileSync(path.join(root, name));
   // This stylesheet was introduced after the historical baseline and is
   // only referenced by the current version of the application.
-  if(name!=='dropbox-feedback.css')
+  if(name!=='dropbox-feedback.css' && name!=='notes-extras.css')
     sources.baseline[name] = execFileSync('git', ['show', `${baselineRef}:${name}`], {cwd: root, maxBuffer: 12 * 1024 * 1024});
 }
 for(const name of additionalPublic) sources.current[name] = fs.readFileSync(path.join(root, name));
@@ -239,6 +239,46 @@ async function verifyNoteFeatures(page) {
   const savedOrder=await page.evaluate(key=>JSON.parse(localStorage.getItem(`${key}:home-order`)),storageKey);
   check(orderAfter.join(',')===[orderBefore[1],orderBefore[2],orderBefore[0]].join(','),'features: right-button drag reorders synthetic notes');
   check(JSON.stringify(orderAfter)===JSON.stringify(savedOrder),'features: drag order persists locally');
+  const grip=page.locator('[data-note-id="'+orderAfter[0]+'"] .sidebar-move-btn');
+  const gripRect=await grip.boundingBox();
+  const targetRect=await page.locator('.sidebar-note-item').last().boundingBox();
+  check(!!gripRect&&!!targetRect,'features: grab handle exists on notes');
+  await page.mouse.move(gripRect.x+gripRect.width/2,gripRect.y+gripRect.height/2);
+  await page.mouse.down({button:'left'});
+  await page.mouse.move(targetRect.x+targetRect.width/2,targetRect.y+targetRect.height-5,{steps:12});
+  await page.mouse.up({button:'left'});
+  const handleOrder=await page.locator('.sidebar-note-item').evaluateAll(items=>items.map(item=>item.dataset.noteId));
+  check(handleOrder.join(',')===[orderAfter[1],orderAfter[2],orderAfter[0]].join(','),
+    'features: left-button grip drag reorders notes without using right mouse');
+  const savedGripOrder=await page.evaluate(key=>JSON.parse(localStorage.getItem(`${key}:home-order`)),storageKey);
+  check(JSON.stringify(handleOrder)===JSON.stringify(savedGripOrder),
+    'features: drag handle order persists after release');
+  const touchResult=await page.evaluate(storageKey=>{
+    const list=document.querySelector('#sidebar-notes-list'),all=[...list.children];
+    const source=all[all.length-1],target=all[0],handle=source.querySelector('.sidebar-move-btn');
+    const start=handle.getBoundingClientRect(),end=target.getBoundingClientRect();
+    const x=start.left+start.width/2,y=start.top+start.height/2;
+    const nx=end.left+end.width/2,ny=end.top+Math.min(9,end.height/3);
+    const capture=list.setPointerCapture,has=list.hasPointerCapture,release=list.releasePointerCapture;
+    list.setPointerCapture=()=>{};list.hasPointerCapture=()=>false;list.releasePointerCapture=()=>{};
+    function trigger(element,type,cx,cy){
+      element.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:876543,pointerType:'touch',
+        button:0,buttons:type==='pointerup'?0:1,clientX:cx,clientY:cy}));
+    }
+    try{
+      trigger(handle,'pointerdown',x,y);
+      trigger(list,'pointermove',nx,ny);
+      trigger(list,'pointerup',nx,ny);
+    } finally {
+      list.setPointerCapture=capture;list.hasPointerCapture=has;list.releasePointerCapture=release;
+    }
+    return {ids:[...list.children].map(e=>e.dataset.noteId),
+      saved:JSON.parse(localStorage.getItem(storageKey+':home-order'))};
+  },storageKey);
+  check(touchResult.ids.join(',')===[handleOrder[2],handleOrder[0],handleOrder[1]].join(','),
+    'features: touch pointer on the drag handle reorders notes');
+  check(JSON.stringify(touchResult.ids)===JSON.stringify(touchResult.saved),
+    'features: touch order saved without deleting content');
   const item=page.locator('[data-note-id="synthetic-note-a"]');
   await item.locator('.sidebar-rename-btn').click();
   await item.locator('.sidebar-title-input').fill('título com palavras minúsculas');
@@ -492,7 +532,43 @@ async function verifyManualDropboxFolder(page) {
     return {fileCount:m.files.size,updates:m.requests.filter(r=>r.endpoint.endsWith('/upload')&&r.mode?.['.tag']==='update').length};
   });
   check(after.fileCount===1&&after.updates===1,'manual: second save updates by Dropbox revision without creating a duplicate');
-  return {hasFolder:first.hasFolder,fileCount:after.fileCount,updates:after.updates};
+  // Readable exports must be separate from the canonical note and must work
+  // in an arbitrary nested Dropbox folder selected by the user.
+  await page.locator('#dropbox-folder').fill('/Arquivo Pessoal/Onyx Links');
+  await page.locator('#dropbox-readable-format').selectOption('md');
+  await page.locator('#dropbox-export-readable').click();
+  await page.waitForFunction(()=>document.querySelector('#dropbox-readable-status').textContent.startsWith('Nota legível exportada:'),{timeout:12000});
+  const mdExport=await page.evaluate(()=>{
+    const m=window.__manualDropbox;
+    const md=[...m.files.entries()].filter(([path])=>path.endsWith('.md'));
+    return {folder:m.folders.has('/Arquivo Pessoal/Onyx Links'),count:md.length,
+      name:md[0]?.[0],data:md[0]?.[1].raw,canonical:m.files.get('/Notas Pro/'+[...m.files.keys()].find(p=>p.endsWith('.keepnote.json')).split('/').pop())?.raw};
+  });
+  check(mdExport.folder&&mdExport.count===1,'export: arbitrary nested Dropbox folder created');
+  check(mdExport.name.endsWith('--synthetic-note-a.md'),'export: readable Markdown filename includes stable note ID');
+  check(mdExport.data.includes('Abrir nota original para editar'),'export: exported Markdown links to editable original');
+  check(mdExport.data.includes('conteúdo sintético alpha'),'export: exported note contains original text');
+  await page.locator('#dropbox-export-readable').click();
+  await page.waitForFunction(()=>window.__manualDropbox.requests.filter(r=>r.endpoint.endsWith('/upload')).length===4,{timeout:10000});
+  const revision=await page.evaluate(()=>{
+    const m=window.__manualDropbox;
+    const list=m.requests.filter(r=>r.endpoint.endsWith('/upload')&&r.path.endsWith('.md'));
+    return {count:list.length,cas:list[1]?.mode?.['.tag']==='update'};
+  });
+  check(revision.count===2 && revision.cas,'export: manual export to same file uses Dropbox revision safely');
+  await page.locator('#dropbox-readable-format').selectOption('html');
+  await page.locator('#dropbox-export-readable').click();
+  await page.waitForFunction(()=>document.querySelector('#dropbox-readable-status').textContent.endsWith('.html'),{timeout:12000});
+  const htmlExport=await page.evaluate(()=>{
+    const m=window.__manualDropbox;
+    const html=[...m.files.entries()].filter(([path])=>path.endsWith('.html'));
+    return {count:html.length,html:html[0]?.[1].raw,files:m.files.size};
+  });
+  check(htmlExport.count===1&&htmlExport.html.includes('<!doctype html>'),
+    'export: optional HTML document created for local browser opening');
+  check(htmlExport.files===3,'export: canonical JSON backup plus Markdown and HTML, no duplicate');
+  return {hasFolder:first.hasFolder,fileCount:htmlExport.files,updates:after.updates,
+    readableFiles:['md','html'],exportedInto:'/Arquivo Pessoal/Onyx Links'};
 }
 
 async function blockedCase(name, sessionMode, rpcResult) {

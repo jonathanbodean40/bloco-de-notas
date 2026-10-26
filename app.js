@@ -218,7 +218,7 @@
   }
   function fitPaper(w) {const scroll=w.el.querySelector('.note-scroll');w.paper.style.width=`${scroll.clientWidth}px`;fitTextBoxes(w);const bounds=w.objects.map(objectBounds);w.paper.style.minWidth=`${Math.max(0,...bounds.map(o=>o.right+25))}px`;w.paper.style.height=`${Math.max(scroll.clientHeight,w.editor.scrollHeight+44,(w.paper.querySelector('.onyx-board')?.scrollHeight||0)+35,...bounds.map(o=>o.bottom+35))}px`;}
   function noteActionIcon(action){
-    const paths={save:'<path d="M5 3h13l3 3v15H3V3h2Z"/><path d="M7 3v7h10V3M7 21v-8h10v8"/>',share:'<path d="M12 16V2m-5 5 5-5 5 5M6 11H3v11h18V11h-3"/>',menu:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',close:'<path d="m5 5 14 14M19 5 5 19"/>'};
+    const paths={export:'<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',save:'<path d="M5 3h13l3 3v15H3V3h2Z"/><path d="M7 3v7h10V3M7 21v-8h10v8"/>',share:'<path d="M12 16V2m-5 5 5-5 5 5M6 11H3v11h18V11h-3"/>',menu:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',close:'<path d="m5 5 14 14M19 5 5 19"/>'};
     const size=action==='save'||action==='share'?32:24;
     return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" style="width:${size}px;height:${size}px" aria-hidden="true" focusable="false">${paths[action]}</svg>`;
   }
@@ -229,7 +229,7 @@
     const initial = data.rect || {x:14+(n%3)*36,y:14+(n%3)*32,w:width,h:height};
     const rect={w:clamp(initial.w,280,Math.max(280,workspace.clientWidth-16)),h:clamp(initial.h,240,Math.max(240,workspace.clientHeight-16)),x:0,y:0};
     rect.x=clamp(initial.x,0,workspace.clientWidth-rect.w);rect.y=clamp(initial.y,0,workspace.clientHeight-40);
-    const el=document.createElement('section');el.className='note-window';el.innerHTML=`<div class="window-bar"><button data-window="save" aria-label="Guardar nota" title="Guardar nota">${noteActionIcon('save')}</button><button data-window="dropbox" aria-label="Guardar no Dropbox" title="Guardar no Dropbox">☁</button><button data-window="menu" aria-label="Opções de formatação" title="Opções de formatação" aria-expanded="false">${noteActionIcon('menu')}</button><button data-window="close" aria-label="Fechar nota" title="Fechar nota sem eliminar">${noteActionIcon('close')}</button></div><div class="note-scroll"><div class="note-paper"><div class="note-editor" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui…" spellcheck="true"></div></div></div><div class="window-footer"><span>${note?'Guardado neste dispositivo':'Pronto para escrever'}</span><span>Gravação manual</span></div>`;
+    const el=document.createElement('section');el.className='note-window';el.innerHTML=`<div class="window-bar"><button data-window="save" aria-label="Guardar nota" title="Guardar nota">${noteActionIcon('save')}</button><button data-window="dropbox" aria-label="Guardar no Dropbox" title="Guardar no Dropbox">☁</button><button data-window="export" aria-label="Exportar nota" title="Exportar nota">${noteActionIcon('export')}</button><button data-window="menu" aria-label="Opções de formatação" title="Opções de formatação" aria-expanded="false">${noteActionIcon('menu')}</button><button data-window="close" aria-label="Fechar nota" title="Fechar nota sem eliminar">${noteActionIcon('close')}</button></div><div class="note-scroll"><div class="note-paper"><div class="note-editor" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui…" spellcheck="true"></div></div></div><div class="window-footer"><span>${note?'Guardado neste dispositivo':'Pronto para escrever'}</span><span>Gravação manual</span></div>`;
     const w={id:note?.id||makeId(),title:note?.title === 'Sem título' ? '' : note?.title || '',el,editor:el.querySelector('.note-editor'),paper:el.querySelector('.note-paper'),footer:el.querySelector('.window-footer span'),...data,rect,selected:null,history:[],historyIndex:0};
     if(!note?.content&&route.searchParams.get('kind')==='onyx'){w.kind='onyx';w.onyxRows=decodeOnyx([{}, {}, {}, {}]);}w.editor.innerHTML=data.html;windows.set(w.id,w);workspace.append(el);geometry(w);linkify(w,false);display(w);w.history=[snapshot(w)];w.savedSnapshot=snapshot(w);w.savedAt=note?.updatedAt;w.savedNote=note?{...note}:null;w.dirty=false;
     const destination=validLocation({noteId:route.searchParams.get('parent'),folderId:route.searchParams.get('folder')});if(destination){w.location=destination;commit(w);}
@@ -238,6 +238,7 @@
     el.querySelectorAll('[data-window]').forEach(button=>button.addEventListener('click',()=>{
       activate(w);const action=button.dataset.window;
       if(action==='close')closeNote(w);if(action==='save')saveNote(w);if(action==='dropbox')dropboxUI?.open(w.id);
+      if(action==='export')dropboxUI?.open(w.id,'export');
       if(action==='menu'){if(!menu.hidden){closeMenu();return;}const r=button.getBoundingClientRect();openMenu(w,r.left,r.bottom+3);}
     }));
     w.paper.addEventListener('contextmenu',e=>{if(mobileFormatMenu()){closeMenu();return;}e.preventDefault();openMenu(w,e.clientX,e.clientY);});
@@ -405,7 +406,11 @@
   }
   function bindNoteReorder(item){
     item.addEventListener('pointerdown',event=>{
-      if(event.button!==2||event.pointerType==='touch'||noteDrag||noteRename||event.target.closest('.sidebar-rename-btn,.sidebar-delete-btn,form'))return;
+      const grip=event.target.closest('.sidebar-move-btn');
+      const mouseRight=event.button===2 && event.pointerType!=='touch';
+      const handleDrag=!!grip && (event.button===0 || event.pointerType==='touch');
+      if((!mouseRight&&!handleDrag)||noteDrag||noteRename||
+        (!handleDrag && event.target.closest('.sidebar-rename-btn,.sidebar-delete-btn,form')))return;
       event.preventDefault();event.stopPropagation();
       const list=$('#sidebar-notes-list'),initial=[...list.children].map(el=>el.dataset.noteId),pointerId=event.pointerId;
       const rect=item.getBoundingClientRect(),offsetX=event.clientX-rect.left,offsetY=event.clientY-rect.top;
@@ -441,7 +446,7 @@
       };
       const move=e=>{
         if(e.pointerId!==pointerId)return;e.preventDefault();x=e.clientX;y=e.clientY;
-        if(!(e.buttons&2)){finish(true);return;}
+        if(e.pointerType!=='touch' && !(e.buttons&(mouseRight?2:1))){finish(false);return;}
         if(!started&&Math.hypot(x-event.clientX,y-event.clientY)>=6){
           started=true;ghost=item.cloneNode(true);ghost.className='sidebar-note-item sidebar-note-drag-preview';ghost.setAttribute('aria-hidden','true');ghost.inert=true;ghost.style.width=`${rect.width}px`;document.body.append(ghost);
           item.classList.add('is-dragging');document.body.classList.add('reordering-notes');frame=requestAnimationFrame(scroll);
@@ -471,8 +476,14 @@
       const heading=document.createElement('strong'),preview=document.createElement('small');heading.textContent=note.title||'Sem título';preview.textContent=plainText(note.content)||'Imagem ou nota vazia';
       const rename=document.createElement('button');rename.className='sidebar-rename-btn';rename.type='button';rename.title='Renomear nota';rename.setAttribute('aria-label',`Renomear nota ${note.title||'Sem título'}`);rename.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m16 3 5 5M4 15 16 3a2.1 2.1 0 0 1 3 3L7 18l-4 1 1-4Z"/></svg>';rename.addEventListener('click',()=>startNoteRename(note.id));
       row.append(heading,rename);content.append(row,preview);
+      const move=document.createElement('button');
+      move.className='sidebar-move-btn';move.type='button';
+      move.setAttribute('aria-label','Arrastar para ordenar a nota '+(note.title||'Sem título'));
+      move.title='Arrastar para mudar a ordem (telemóvel ou rato)';
+      move.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="5" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg>';
+      move.addEventListener('click',e=>e.preventDefault());
       const remove=document.createElement('button');remove.className='sidebar-delete-btn';remove.type='button';remove.setAttribute('aria-label',`Eliminar nota ${note.title||'Sem título'}`);remove.title='Mover para Notas excluídas';remove.textContent='×';remove.addEventListener('click',e=>{e.stopPropagation();deleteNoteById(note.id);});
-      item.append(open,content,remove);bindNoteReorder(item);list.append(item);
+      item.append(open,content,move,remove);bindNoteReorder(item);list.append(item);
     });
     list.scrollTop=scrollTop;
   }

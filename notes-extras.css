@@ -1,0 +1,14 @@
+/* Exportação manual + ordenação por gesto. Separado do CSS clínico aprovado. */
+.sidebar-move-btn{position:absolute;right:3px;bottom:3px;z-index:4;display:grid;place-items:center;width:36px;height:36px;border:0;background:transparent;color:#647987;border-radius:7px;cursor:grab;touch-action:none;user-select:none}
+.sidebar-move-btn:hover,.sidebar-move-btn:focus-visible{background:#e5eff3;color:#155a73}
+.sidebar-move-btn svg{width:20px;height:20px;fill:currentColor;pointer-events:none}
+.sidebar-note-item.is-dragging .sidebar-move-btn{cursor:grabbing}
+@media(pointer:coarse){.sidebar-move-btn{width:42px;height:42px}.sidebar-move-btn svg{width:23px;height:23px}}
+.dropbox-readable-export{margin-top:16px;border:1px solid #d5e0e8;border-radius:10px;padding:14px;background:#fff}
+.dropbox-readable-export h3{font-size:16px;margin:0 0 8px;color:#244559}
+.dropbox-readable-export p{font-size:13px;line-height:1.5;color:#5a6b75;overflow-wrap:anywhere}
+.dropbox-readable-export label{font-size:13px;display:block}
+#dropbox-readable-format{display:block;margin-top:6px;width:100%;max-width:100%;padding:11px;background:white;border:1px solid #c1d1d9;border-radius:7px;font:inherit;font-size:13px}
+#dropbox-readable-status{font-size:13px;overflow-wrap:anywhere;color:#285b65}
+#dropbox-export-readable,#dropbox-download-readable{white-space:normal;line-height:1.3;min-height:42px}
+@media(max-width:600px){.dropbox-readable-export{padding:12px}.dropbox-readable-export .dialog-actions button{width:100%;justify-content:center}}

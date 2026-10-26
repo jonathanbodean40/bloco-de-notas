@@ -61,8 +61,10 @@ async function run() {
     assert.throws(() => buildPrompt('guide', {...sample, planning:'plano sem endereço'}));
     assert.throws(() => buildPrompt('guide', {...sample, notes:'x'.repeat(2001)}));
   });
-  await check('Código do editor e de autenticação sem alterações face à versão publicada', () => {
-    for (const name of ['app.js','private-access.js','config.js','style.css']) {
+  await check('Autenticação, configuração e estilos principais preservados face à versão publicada', () => {
+    // The note editor is intentionally modified to restore export and reordering.
+    // Authentication/configuration and approved main styling must not regress.
+    for (const name of ['private-access.js','config.js','style.css']) {
       assert.equal(execFileSync('git',['diff','--exit-code','HEAD','--',name],{cwd:root,encoding:'utf8'}),'');
     }
     const tool = fs.readFileSync(path.join(root,'keep-aligner-tool.js'),'utf8');

@@ -4,8 +4,9 @@
 (function (root) {
   'use strict';
   function create({owner, getNote, getNotes, importNote, applyRemote, adoptRemote, ensureSaved, prepareActivation, requestSync, getActiveId, getCurrentOwner, openNote, currentUrl}) {
-    if (!root.NotasDropboxStorage || !root.NotasDropboxOAuth || !root.NotasDropboxPrimary) throw new Error('Módulos Dropbox indisponíveis');
+    if (!root.NotasDropboxStorage || !root.NotasDropboxOAuth || !root.NotasDropboxPrimary || !root.NotasReadableExport) throw new Error('Módulos Dropbox indisponíveis');
     const db = root.NotasDropboxStorage;
+    const readable = root.NotasReadableExport;
     const Auth = root.NotasDropboxOAuth.DropboxOAuth;
     const $ = id => document.getElementById(id);
     const box = $('dropbox-dialog');
@@ -16,6 +17,11 @@
     const mappingsKey = 'notas-pro:dropbox-mappings:v1:' + owner;
     const appKeyKey = 'notas-pro:dropbox-app-key:v1';
     const folderKey = 'notas-pro:dropbox-folder:v1:' + owner;
+    const readableKey = 'notas-pro:readable-exports:v1:' + owner;
+    const formatKey = 'notas-pro:readable-export-format:v1:' + owner;
+    const readableFormat = $('dropbox-readable-format');
+    const readableStatus = $('dropbox-readable-status');
+    readableFormat.value = localStorage.getItem(formatKey) === 'html' ? 'html' : 'md';
     let selectedId = null;
     let oauth = null;
     let flight = null;
@@ -334,7 +340,7 @@
         if (note && note.updatedAt !== mapping.syncedAt) queue(id);
       }
     }
-    function open(id) {
+    function open(id,mode) {
       if (getCurrentOwner() !== owner) return;
       selectedId = id || null;
       const note = id && getNote(id);
@@ -343,7 +349,10 @@
       if (map?.folder) folderInput.value = map.folder;
       else if (map?.path) folderInput.value = map.path.slice(0, map.path.lastIndexOf('/'));
       say(oauth?.connected() ? 'Dropbox ligado nesta sessão' : 'Dropbox não ligado');
+      readableStatus.textContent='';
       box.showModal();
+      if(mode==='export')
+        root.requestAnimationFrame(()=> $('dropbox-readable-export').scrollIntoView({block:'nearest',behavior:'auto'}));
     }
     function close() { box.close(); }
     async function connect() {
@@ -466,6 +475,71 @@
       const result = await client().ensureFolder(path);
       say(result.created.length ? 'Pasta criada: ' + path : 'A pasta já existe: ' + path);
     }
+    function readableMap() {
+      try {
+        const value=JSON.parse(localStorage.getItem(readableKey)||'{}');
+        return value && typeof value==='object' && !Array.isArray(value) ? value : {};
+      } catch (_) { return {}; }
+    }
+    function selectedReadable() {
+      const id=selectedId;
+      if(!id)throw new Error('Abra primeiro uma nota para exportar');
+      if(!ensureSaved(id))throw new Error('Guarde primeiro as alterações da nota');
+      const note=currentNote();
+      const format=readableFormat.value==='html'?'html':'md';
+      return readable.make(note,format,currentUrl,owner);
+    }
+    async function exportReadable() {
+      readableStatus.textContent='A preparar uma cópia legível da nota…';
+      try {
+        if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)
+          throw new Error('Entre novamente na conta autorizada');
+        if(!oauth?.connected()) throw new Error('Ligue primeiro a conta Dropbox');
+        const exported=selectedReadable();
+        const folder=safeFolder();
+        const path=folder+'/'+exported.name;
+        const map=readableMap(),previous=map[path];
+        if(previous && previous.noteId!==selectedId)
+          throw new Error('Este nome de ficheiro está reservado para outra nota');
+        readableStatus.textContent='A guardar '+exported.name+' no Dropbox…';
+        const remote=client();
+        await remote.ensureFolder(folder);
+        // Unknown files are NEVER overwritten. Known revisions use CAS.
+        const result=await remote.upload(path,exported.data,previous?.rev||null);
+        localStorage.setItem(folderKey,folder);
+        localStorage.setItem(formatKey,readableFormat.value);
+        try {
+          map[path]={noteId:selectedId,rev:result.rev,exportedAt:new Date().toISOString()};
+          localStorage.setItem(readableKey,JSON.stringify(map));
+          readableStatus.textContent='Nota legível exportada: '+path;
+        } catch(_) {
+          readableStatus.textContent='Ficheiro guardado em '+path+
+            ', mas este dispositivo não conseguiu memorizar a revisão. Evite voltar a exportar com o mesmo nome antes de verificar.';
+        }
+      } catch(err) {
+        const message=db.userMessage(err);
+        readableStatus.textContent='Exportação não concluída: '+message;
+      }
+    }
+    function downloadReadable() {
+      try {
+        if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)
+          throw new Error('Entre novamente na conta autorizada');
+        const exported=selectedReadable();
+        const url=root.URL.createObjectURL(new root.Blob([exported.data],{type:exported.mime}));
+        const anchor=document.createElement('a');
+        anchor.href=url;anchor.download=exported.name;
+        anchor.hidden=true;
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        root.setTimeout(()=>root.URL.revokeObjectURL(url),10000);
+        localStorage.setItem(formatKey,readableFormat.value);
+        readableStatus.textContent='A transferência do ficheiro '+exported.name+' foi iniciada.';
+      } catch(err) {
+        readableStatus.textContent='Não foi possível descarregar a nota: '+(err?.message||'Erro desconhecido');
+      }
+    }
     async function saveSelected() {
       const id = selectedId;
       if (!id) throw new Error('Abra primeiro uma nota');
@@ -504,6 +578,8 @@
       ['dropbox-browse',listFolders],
       ['dropbox-create-folder',createFolder],
       ['dropbox-save',saveSelected],
+      ['dropbox-export-readable',exportReadable],
+      ['dropbox-download-readable',downloadReadable],
       ['dropbox-recover',recoverSelected],
       ['dropbox-copy-link',copyLink],
       ['dropbox-inspect-conflicts',inspectBeforeActivation],

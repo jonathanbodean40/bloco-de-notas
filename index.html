@@ -6,7 +6,7 @@
   <title>Notas Exclusivas Pro</title>
   <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Notas Pro">
   <link rel="preload" href="app.js" as="script">
-  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="keep-aligner-tool.css"><link rel="stylesheet" href="dropbox-feedback.css">
+  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="keep-aligner-tool.css"><link rel="stylesheet" href="dropbox-feedback.css"><link rel="stylesheet" href="notes-extras.css">
   <style>[hidden]{display:none!important}body.private-locked>#private-app{display:none!important}</style>
 </head>
 <body class="private-locked">
@@ -129,8 +129,24 @@
     <label>Pasta do Dropbox<input id="dropbox-folder" type="text" placeholder="/Bloco de Notas Pro/Notas" value="/Bloco de Notas Pro/Notas"></label>
     <div class="dialog-actions"><button type="button" id="dropbox-browse">Explorar pastas</button><button type="button" id="dropbox-create-folder">Criar pasta</button></div>
     <div id="dropbox-folders" class="dropbox-folder-list"></div>
-    <div class="dialog-actions"><button type="button" id="dropbox-save">Guardar cópia desta nota</button><button type="button" id="dropbox-recover">Comparar com cópia</button><button type="button" id="dropbox-copy-link">Copiar ligação direta</button></div>
+    <div class="dialog-actions"><button type="button" id="dropbox-save">Guardar cópia técnica desta nota</button><button type="button" id="dropbox-recover">Comparar com cópia</button><button type="button" id="dropbox-copy-link">Copiar ligação direta</button></div>
     <p id="dropbox-status" role="status" aria-live="polite">Não ligado ao Dropbox.</p>
+    <section id="dropbox-readable-export" class="dropbox-readable-export" aria-labelledby="dropbox-readable-title">
+      <h3 id="dropbox-readable-title">Exportar nota para abrir no Dropbox</h3>
+      <p>Exportação manual independente da sincronização. Escolhe a pasta acima e o formato da cópia.</p>
+      <label for="dropbox-readable-format">Formato da nota
+        <select id="dropbox-readable-format">
+          <option value="md">Markdown (.md) — leitura direta no Dropbox do POCO; ligações clicáveis</option>
+          <option value="html">HTML (.html) — texto formatado e imagens; pode exigir abrir no navegador</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="dropbox-export-readable">Guardar nota legível nesta pasta do Dropbox</button>
+        <button type="button" id="dropbox-download-readable">Descarregar nota</button>
+      </div>
+      <p id="dropbox-readable-status" role="status" aria-live="polite"></p>
+      <small>Os ficheiros exportados são cópias para consulta. Não substituem a nota editável nem alteram o índice central de sincronização.</small>
+    </section>
     <section class="dropbox-primary-settings" aria-labelledby="dropbox-primary-title">
       <h3 id="dropbox-primary-title">Armazenamento principal e cópias de segurança</h3>
       <p>Modo local-first: a escrita continua imediata no dispositivo; o Dropbox recebe as notas em segundo plano, com histórico de revisões. O Supabase permanece como cópia adicional.</p>
@@ -164,7 +180,7 @@
     <p class="ka-privacy">Os campos desta ferramenta não são guardados nas notas nem enviados para um servidor. Permanecem apenas nesta página até a recarregar. Copiar coloca o pedido na área de transferência.</p>
   </dialog>
   </div>
-  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="dropbox-storage.js"></script><script src="dropbox-token-vault.js"></script><script src="dropbox-oauth.js"></script><script src="dropbox-primary.js"></script><script src="dropbox-ui.js"></script><script src="private-access.js"></script><script src="keep-aligner-tool.js"></script>
+  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="dropbox-storage.js"></script><script src="dropbox-token-vault.js"></script><script src="dropbox-oauth.js"></script><script src="dropbox-primary.js"></script><script src="note-export.js"></script><script src="dropbox-ui.js"></script><script src="private-access.js"></script><script src="keep-aligner-tool.js"></script>
 </body></html>
 
 

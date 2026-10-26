@@ -36,6 +36,7 @@ function harness(entry=file,body=raw,primaryOverride=null,options={}) {
   globalThis.NOTAS_PRIVATE={authorized:true};
   globalThis.addEventListener=()=>{};
   globalThis.NotasDropboxStorage=db;
+  globalThis.NotasReadableExport=require('../note-export.js');
   globalThis.NotasDropboxPrimary=primaryOverride||require('../dropbox-primary.js');
   globalThis.NotasDropboxOAuth={DropboxOAuth:class {
     constructor({appKey}){this.appKey=appKey;}

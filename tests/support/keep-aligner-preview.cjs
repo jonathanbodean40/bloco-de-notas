@@ -5,8 +5,8 @@ const root = path.resolve(__dirname, '../..');
 const bootstrap = path.join(__dirname, 'keep-aligner-preview-bootstrap.js');
 const allowed = new Set([
   'index.html','app.js','style.css','keep-aligner-tool.css','keep-aligner-tool.js',
-  'dropbox-feedback.css','dropbox-storage.js','dropbox-token-vault.js',
-  'dropbox-oauth.js','dropbox-primary.js','dropbox-ui.js',
+  'dropbox-feedback.css','notes-extras.css','dropbox-storage.js','dropbox-token-vault.js',
+  'dropbox-oauth.js','dropbox-primary.js','note-export.js','dropbox-ui.js',
   'icon.svg','manifest.webmanifest','spell-worker.js','service-worker.js'
 ]);
 const types = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'};
