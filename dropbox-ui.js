@@ -340,6 +340,59 @@
         if (note && note.updatedAt !== mapping.syncedAt) queue(id);
       }
     }
+    const shareDialog=$('note-share-dialog');
+    const shareStatus=$('note-share-status');
+    let shareNoteId=null;
+    function shareMessage(value){shareStatus.textContent=value;}
+    function shareTarget(){
+      if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)
+        throw new Error('A sessão do Bloco de Notas Pro não está autorizada.');
+      const note=shareNoteId&&getNote(shareNoteId);
+      if(!note||note.deletedAt)throw new Error('A nota selecionada não está disponível.');
+      if(!ensureSaved(shareNoteId))throw new Error('Guarda primeiro as alterações da nota.');
+      return {title:note.title||'Sem título',url:db.deepLink(currentUrl,owner,note.id)};
+    }
+    function shareOpen(id){
+      const note=id&&getNote(id);
+      if(!note||note.deletedAt)return;
+      selectedId=id;shareNoteId=id;
+      if(box.open)box.close();
+      shareMessage('Escolhe onde pretendes partilhar a ligação para esta nota.');
+      $('note-share-selected').textContent=note.title||'Sem título';
+      shareDialog.showModal();
+    }
+    function shareDropboxShortcut(){
+      try{
+        const note=shareTarget();
+        // Dropbox's public API cannot create a genuine .web shortcut.
+        // Copy the private deep-link and open Dropbox web for the user's
+        // built-in Create → More → Shortcut action in the chosen folder.
+        const copying=navigator.clipboard?.writeText(note.url);
+        root.open('https://www.dropbox.com/home','_blank','noopener,noreferrer');
+        if(copying && typeof copying.then==='function'){
+          copying.then(()=>shareMessage('Ligação da nota copiada. No Dropbox, abre a pasta desejada e escolhe Criar → Mais → Atalho. Cola a ligação e guarda.'))
+            .catch(()=>shareMessage('Abre o Dropbox e cria um atalho com esta ligação: '+note.url));
+        }else shareMessage('Abre o Dropbox e cria um atalho com esta ligação: '+note.url);
+      }catch(err){shareMessage('Não foi possível abrir o Dropbox: '+(err.message||'erro'));}
+    }
+    function shareWhatsapp(){
+      try{
+        const note=shareTarget();
+        const url='https://wa.me/?text='+encodeURIComponent(note.title+'\n'+note.url);
+        root.open(url,'_blank','noopener,noreferrer');
+        shareMessage('WhatsApp aberto para partilhar a ligação. A nota exige acesso autorizado ao Bloco de Notas Pro.');
+      }catch(err){shareMessage('Não foi possível abrir WhatsApp: '+(err.message||'erro'));}
+    }
+    function shareGmail(){
+      try{
+        const note=shareTarget();
+        const compose='https://mail.google.com/mail/?view=cm&fs=1&su='+
+          encodeURIComponent('Nota: '+note.title)+'&body='+
+          encodeURIComponent('Abrir a nota original no Bloco de Notas Pro:\n'+note.url);
+        root.open(compose,'_blank','noopener,noreferrer');
+        shareMessage('Gmail aberto para preparar o email. A nota exige acesso autorizado ao Bloco de Notas Pro.');
+      }catch(err){shareMessage('Não foi possível abrir Gmail: '+(err.message||'erro'));}
+    }
     const quickDialog=$('quick-export-dialog');
     const quickLocation=$('quick-export-path');
     const quickFolderList=$('quick-export-folder-list');
@@ -535,6 +588,7 @@
     }
     function open(id,mode) {
       if (getCurrentOwner() !== owner) return;
+      if(mode==='share'){shareOpen(id);return;}
       if(mode==='export'){quickOpen(id);return;}
       selectedId = id || null;
       const note = id && getNote(id);
@@ -766,6 +820,10 @@
     }
     $('dropbox-btn').addEventListener('click', () => open(getActiveId()));
     $('dropbox-close').addEventListener('click', close);
+    $('note-share-close').addEventListener('click',()=>{shareDialog.close();shareNoteId=null;});
+    $('note-share-dropbox').addEventListener('click',shareDropboxShortcut);
+    $('note-share-whatsapp').addEventListener('click',shareWhatsapp);
+    $('note-share-gmail').addEventListener('click',shareGmail);
     $('quick-export-close').addEventListener('click',()=>quickDialog.close());
     $('quick-export-up').addEventListener('click',()=>{
       quickPath=quickPath.slice(0,quickPath.lastIndexOf('/'));
@@ -829,6 +887,8 @@
       waiting.clear();
       quickRequest++;
       if(quickDialog.open)quickDialog.close();
+      if(shareDialog.open)shareDialog.close();
+      shareNoteId=null;
     });
     root.addEventListener('notas:private-authorized', () => {
       if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)return;

@@ -40,3 +40,17 @@ dialog.quick-export-dialog{width:min(620px,calc(100vw - 22px));max-width:620px;m
 #quick-export-status{font-size:13px;line-height:1.5;color:#245667;min-height:25px;margin:15px 0 8px;overflow-wrap:anywhere}
 .quick-export-dialog>small{display:block;font-size:11px;line-height:1.5;color:#73818a}
 @media(max-width:520px){dialog.quick-export-dialog{padding:14px 12px 20px}.quick-export-location{flex-wrap:wrap}.quick-export-folder-list{max-height:210px}.quick-export-actions{flex-direction:column}.quick-export-actions button{width:100%;text-align:center}.quick-export-location input{flex-basis:150px}}
+
+/* Painel único de partilha — sem acesso ao painel técnico Dropbox. */
+dialog.note-share-dialog{box-sizing:border-box;width:min(440px,calc(100vw - 24px));max-width:440px;max-height:calc(100dvh - 28px);overflow:auto;border:1px solid #d4dfe7;border-radius:15px;padding:19px 18px 22px;background:#fff;color:#243e4b;box-shadow:0 15px 50px #24384a30}
+dialog.note-share-dialog::backdrop{background:#132b3b78}
+.note-share-dialog .dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.note-share-dialog .dialog-heading h2{font-size:21px;margin:0;font-weight:600}
+#note-share-close{border:1px solid #d5dfe5;border-radius:9px;background:#fff;color:#345368;font-size:23px;width:44px;height:44px;flex:none}
+.note-share-selected{font-size:14px;color:#607381;overflow-wrap:anywhere;margin:10px 0 16px}
+.note-share-destinations{display:grid;gap:9px}
+.note-share-destinations button{width:100%;display:flex;align-items:center;justify-content:center;min-height:54px;padding:12px;border:1px solid #cbd9e0;border-radius:10px;color:#214d62;font-size:17px;font-weight:600;background:#f8fbfd;cursor:pointer}
+.note-share-destinations button:hover,.note-share-destinations button:focus-visible{background:#e9f3f7;border-color:#a5c8d7}
+#note-share-status{min-height:36px;margin:15px 0 10px;font-size:13px;color:#365e70;line-height:1.5;overflow-wrap:anywhere}
+.note-share-dialog>small{display:block;font-size:12px;color:#73818a;line-height:1.5}
+@media(max-width:480px){dialog.note-share-dialog{padding:16px 14px 20px}.note-share-destinations button{min-height:58px}}

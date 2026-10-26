@@ -296,11 +296,44 @@ async function verifyNoteFeatures(page) {
   await editor.pressSequentially('texto simples com palavras pequenas');
   const typed=await editor.innerText();
   check(typed==='Texto simples com palavras pequenas','features: real keyboard input capitalizes first sentence letter without capitalizing each word');
-  await page.locator('[data-window="dropbox"]').first().click();
-  check(await page.locator('#dropbox-dialog').evaluate(el=>el.open),'features: botão Dropbox abre caixa de diálogo sem ligação à nuvem');
-  check((await page.locator('#dropbox-selected-note').innerText()).includes('Nota:'),'features: ligação Dropbox identifica nota ativa');
-  await page.locator('#dropbox-close').click();
-  check(!(await page.locator('#dropbox-dialog').evaluate(el=>el.open)),'features: diálogo Dropbox fecha sem alterar notas');
+  await page.evaluate(()=>{
+    window.__shareLinksOpened=[];
+    window.__shareLinkCopied='';
+    window.open=url=>{window.__shareLinksOpened.push(url);return {closed:false};};
+    Object.defineProperty(navigator,'clipboard',{configurable:true,
+      value:{writeText:async text=>{window.__shareLinkCopied=text;}}});
+  });
+  check(await page.locator('[data-window="share"]').count()===1,
+    'features: only one share icon in the note toolbar');
+  check(await page.locator('[data-window="dropbox"],[data-window="export"]').count()===0,
+    'features: old Dropbox cloud and export icons are removed');
+  check(await page.locator('#dropbox-btn').isHidden(),
+    'features: technical Dropbox panel is not exposed in the main footer');
+  await page.locator('[data-window="share"]').first().click();
+  check(await page.locator('#note-share-dialog').evaluate(el=>el.open),
+    'features: share icon opens only simple share menu');
+  check(await page.locator('.note-share-destinations button').count()===3,
+    'features: exactly three destinations Dropbox, WhatsApp and Gmail');
+  await page.locator('#note-share-dropbox').click();
+  await page.waitForFunction(()=>!!window.__shareLinkCopied);
+  await page.locator('#note-share-whatsapp').click();
+  await page.locator('#note-share-gmail').click();
+  const links=await page.evaluate(()=>({
+    url:window.__shareLinkCopied,
+    opened:window.__shareLinksOpened,
+    technical:document.querySelector('#dropbox-dialog').open
+  }));
+  check(new URL(links.url).searchParams.has('note') && new URL(links.url).searchParams.has('scope'),
+    'features: Dropbox receives the direct editable note URL');
+  check(links.opened.length===3 &&
+    new URL(links.opened[0]).hostname==='www.dropbox.com' &&
+    new URL(links.opened[1]).hostname==='wa.me' &&
+    new URL(links.opened[2]).hostname==='mail.google.com',
+    'features: Dropbox, WhatsApp and Gmail launch from the three share options');
+  check(!links.technical,'features: old technical Dropbox dialog never appears from Share');
+  await page.locator('#note-share-close').click();
+  check(!(await page.locator('#note-share-dialog').evaluate(el=>el.open)),
+    'features: close share dialog leaves the note intact');
   await page.evaluate(() => {
     document.querySelector('#dropbox-key').value = 'synthetickey';
     sessionStorage.setItem('notas-pro-dropbox-pkce-v1:synthetic-owner:synthetickey:tokens', JSON.stringify({access_token:'synthetic-only',expires_at:Date.now()+3600000}));
@@ -313,7 +346,7 @@ async function verifyNoteFeatures(page) {
     };
     window.open = url => {window.__syntheticDropboxOpened=url;return {closed:false,focus(){}};};
   });
-  await page.locator('#dropbox-btn').click();
+  await page.evaluate(()=>document.querySelector('#dropbox-btn').click());
   await page.locator('#dropbox-browse').click();
   await page.getByText('Abrir nota: Alpha').click();
   const opened=await page.evaluate(()=>window.__syntheticDropboxOpened);
@@ -376,7 +409,7 @@ async function verifyPrimaryMode(page) {
       throw Error('Endpoint de Dropbox inesperado: '+endpoint);
     };
   });
-  await page.locator('#dropbox-btn').click();
+  await page.evaluate(()=>document.querySelector('#dropbox-btn').click());
   await page.locator('#dropbox-browse').click();
   await page.waitForFunction(()=>document.querySelector('#dropbox-status').textContent.startsWith('Pasta:'));
   // Reproduce the POCO report: activation was silently blocked by a conflict,
@@ -513,7 +546,7 @@ async function verifyManualDropboxFolder(page) {
       throw Error('Endpoint não previsto no teste: '+endpoint);
     };
   });
-  await page.locator('#dropbox-btn').click();
+  await page.evaluate(()=>document.querySelector('#dropbox-btn').click());
   check((await page.locator('#dropbox-folder').inputValue())==='/Notas Pro',
     'manual: user selected missing folder retained');
   await page.locator('#dropbox-save').click();
@@ -585,7 +618,12 @@ async function verifyManualDropboxFolder(page) {
     }});
     Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
   });
-  await page.locator('[data-window="export"]').first().click();
+  await page.evaluate(()=>{
+    // Regression test the internal legacy export without exposing its controls
+    // in the production note toolbar.
+    document.querySelector('#quick-export-dialog').showModal();
+    document.querySelector('#quick-export-refresh').click();
+  });
   await page.waitForFunction(()=>{
     const dialog=document.querySelector('#quick-export-dialog'),s=document.querySelector('#quick-export-status');
     return dialog.open&&s.textContent.startsWith('Escolhe uma pasta');

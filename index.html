@@ -46,7 +46,7 @@
   <footer id="app-footer" aria-label="Conta e sincronização">
     <button id="keep-aligner-tool-btn" type="button" aria-haspopup="dialog" aria-controls="keep-aligner-dialog" title="Abrir ferramenta KEEP ALIGNER">KEEP ALIGNER</button>
     <button id="account-btn">Conta</button>
-    <button id="dropbox-btn" type="button" title="Dropbox">Dropbox</button>
+    <button id="dropbox-btn" type="button" title="Dropbox (ferramentas internas)" hidden>Dropbox</button>
     <button id="sync-icon-btn" aria-label="Sincronizar" title="Sincronizar">⟳</button>
     <span id="save-status" role="status" aria-live="polite"></span>
   </footer>
@@ -162,6 +162,20 @@
       <small>Antes da ativação, todas as notas devem estar sincronizadas. Se houver versões divergentes, a migração é bloqueada sem apagar conteúdo. Após a ativação, o botão «Guardar cópia» permite escolher outra pasta, mantendo a versão anterior recuperável.</small>
     </section>
     <small>As pastas são navegáveis diretamente nesta aplicação. Abrir ficheiros .keepnote.json com um toque a partir da aplicação Dropbox depende do sistema operativo e não é garantido.</small>
+  </dialog>
+  <dialog id="note-share-dialog" class="note-share-dialog" aria-labelledby="note-share-title">
+    <div class="dialog-heading">
+      <h2 id="note-share-title">Partilhar nota</h2>
+      <button id="note-share-close" type="button" aria-label="Fechar partilha">✕</button>
+    </div>
+    <p id="note-share-selected" class="note-share-selected"></p>
+    <div class="note-share-destinations">
+      <button id="note-share-dropbox" type="button">Dropbox</button>
+      <button id="note-share-whatsapp" type="button">WhatsApp</button>
+      <button id="note-share-gmail" type="button">Gmail</button>
+    </div>
+    <p id="note-share-status" role="status" aria-live="polite"></p>
+    <small>As opções partilham a ligação privada para a nota original. A edição e a sincronização continuam no Bloco de Notas Pro; abrir a ligação exige uma sessão autorizada.</small>
   </dialog>
   <dialog id="quick-export-dialog" class="quick-export-dialog" aria-labelledby="quick-export-title">
     <div class="dialog-heading">
