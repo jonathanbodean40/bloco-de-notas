@@ -136,8 +136,9 @@
       <p>Exportação manual independente da sincronização. Escolhe a pasta acima e o formato da cópia.</p>
       <label for="dropbox-readable-format">Formato da nota
         <select id="dropbox-readable-format">
-          <option value="md">Markdown (.md) — leitura direta no Dropbox do POCO; ligações clicáveis</option>
-          <option value="html">HTML (.html) — texto formatado e imagens; pode exigir abrir no navegador</option>
+          <option value="md">Markdown (.md) — texto e hiperligações</option>
+          <option value="txt">Texto (.txt) — editável num editor de texto compatível</option>
+          <option value="html">HTML (.html) — texto formatado e imagens</option>
         </select>
       </label>
       <div class="dialog-actions">
@@ -161,6 +162,50 @@
       <small>Antes da ativação, todas as notas devem estar sincronizadas. Se houver versões divergentes, a migração é bloqueada sem apagar conteúdo. Após a ativação, o botão «Guardar cópia» permite escolher outra pasta, mantendo a versão anterior recuperável.</small>
     </section>
     <small>As pastas são navegáveis diretamente nesta aplicação. Abrir ficheiros .keepnote.json com um toque a partir da aplicação Dropbox depende do sistema operativo e não é garantido.</small>
+  </dialog>
+  <dialog id="quick-export-dialog" class="quick-export-dialog" aria-labelledby="quick-export-title">
+    <div class="dialog-heading">
+      <h2 id="quick-export-title">Exportar nota</h2>
+      <button id="quick-export-close" type="button" aria-label="Fechar exportação">✕</button>
+    </div>
+    <p id="quick-export-note" class="quick-export-note"></p>
+    <div class="quick-export-formats">
+      <label for="quick-export-format">Formato da cópia</label>
+      <select id="quick-export-format">
+        <option value="md">Nota com links (.md) — abrir e editar o original</option>
+        <option value="txt">Texto editável (.txt) — para editores de texto compatíveis</option>
+        <option value="html">Nota formatada (.html) — com imagens</option>
+      </select>
+    </div>
+    <section class="quick-export-folders" aria-labelledby="quick-export-dropbox-heading">
+      <h3 id="quick-export-dropbox-heading">Guardar no Dropbox</h3>
+      <p class="quick-export-hint">Escolhe uma pasta a partir da raiz do Dropbox. A ligação à conta é lembrada neste dispositivo.</p>
+      <div class="quick-export-location">
+        <button id="quick-export-up" type="button">← Voltar</button>
+        <strong id="quick-export-path">Dropbox /</strong>
+        <button id="quick-export-refresh" type="button">Atualizar</button>
+      </div>
+      <div id="quick-export-folder-list" class="quick-export-folder-list" role="group" aria-label="Pastas Dropbox"></div>
+      <div class="quick-export-location">
+        <input id="quick-export-new-folder" type="text" maxlength="150" autocomplete="off" placeholder="Nome de nova pasta" aria-label="Nome da nova pasta">
+        <button id="quick-export-mkdir" type="button">Criar pasta</button>
+      </div>
+      <div class="quick-export-actions">
+        <button id="quick-export-save" type="button">Guardar nesta pasta</button>
+        <button id="quick-export-connect" type="button" hidden>Autorizar Dropbox (apenas na primeira utilização)</button>
+      </div>
+    </section>
+    <section class="quick-export-share" aria-labelledby="quick-export-share-title">
+      <h3 id="quick-export-share-title">Enviar ou guardar</h3>
+      <div class="quick-export-actions">
+        <button id="quick-export-share-text" type="button">WhatsApp, email e outras aplicações</button>
+        <button id="quick-export-share-file" type="button">Enviar ficheiro</button>
+        <button id="quick-export-download" type="button">Guardar no dispositivo</button>
+      </div>
+      <button id="quick-export-open-original" type="button">Editar esta nota no Bloco de Notas Pro</button>
+    </section>
+    <p id="quick-export-status" role="status" aria-live="polite">A escolher o destino da nota.</p>
+    <small>Todos os formatos incluem uma ligação para editar a nota original no Bloco de Notas Pro. Uma cópia .txt pode ser editada por aplicações externas compatíveis, mas essas alterações não sincronizam automaticamente com a nota original.</small>
   </dialog>
   <dialog id="link-dialog"><form id="link-form"><div class="dialog-heading"><h2>Adicionar ligação</h2><button id="cancel-link" type="button" aria-label="Cancelar ligação">✕</button></div><label>Endereço completo<input id="link-url" type="text" required placeholder="https://…"></label><label>Texto a mostrar (opcional)<input id="link-label" type="text" placeholder="Abrir página ou plano de tratamento"></label><p id="link-error" role="status"></p><div class="dialog-actions"><button type="submit">Adicionar ligação</button></div></form></dialog>
   <dialog id="keep-aligner-dialog" aria-labelledby="keep-aligner-title" aria-describedby="keep-aligner-intro">

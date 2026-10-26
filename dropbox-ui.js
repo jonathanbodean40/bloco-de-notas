@@ -21,7 +21,7 @@
     const formatKey = 'notas-pro:readable-export-format:v1:' + owner;
     const readableFormat = $('dropbox-readable-format');
     const readableStatus = $('dropbox-readable-status');
-    readableFormat.value = localStorage.getItem(formatKey) === 'html' ? 'html' : 'md';
+    readableFormat.value = ['md','html','txt'].includes(localStorage.getItem(formatKey)) ? localStorage.getItem(formatKey) : 'md';
     let selectedId = null;
     let oauth = null;
     let flight = null;
@@ -340,8 +340,202 @@
         if (note && note.updatedAt !== mapping.syncedAt) queue(id);
       }
     }
+    const quickDialog=$('quick-export-dialog');
+    const quickLocation=$('quick-export-path');
+    const quickFolderList=$('quick-export-folder-list');
+    const quickStatus=$('quick-export-status');
+    const quickFormat=$('quick-export-format');
+    const quickConnect=$('quick-export-connect');
+    let quickPath='',quickRequest=0,quickBusy=false;
+    function quickMessage(message){quickStatus.textContent=message;}
+    function quickNote(){
+      if(!selectedId)throw new Error('Abra uma nota antes de exportar.');
+      if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)
+        throw new Error('Entre novamente na conta do Bloco de Notas Pro.');
+      if(!ensureSaved(selectedId))
+        throw new Error('Não foi possível guardar todas as alterações da nota.');
+      return currentNote();
+    }
+    function quickExport(){
+      const note=quickNote();
+      const format=['md','html','txt'].includes(quickFormat.value)?quickFormat.value:'md';
+      return readable.make(note,format,currentUrl,owner);
+    }
+    function quickLocationText(){
+      quickLocation.textContent='Dropbox'+(quickPath?quickPath:' /');
+      $('quick-export-up').disabled=!quickPath;
+    }
+    async function readyDropbox(){
+      const auth=makeAuth();
+      if(!auth.connected())await auth.restorePersistent();
+      return auth.connected();
+    }
+    async function quickBrowse(){
+      const sequence=++quickRequest;
+      quickLocationText();
+      quickFolderList.replaceChildren();
+      quickMessage('A consultar as pastas Dropbox…');
+      try{
+        const connected=await readyDropbox();
+        if(sequence!==quickRequest)return;
+        quickConnect.hidden=connected;
+        if(!connected){
+          quickMessage('Autoriza o Dropbox uma única vez neste dispositivo. Também podes utilizar «Enviar ficheiro» para escolher o Dropbox no menu do Android.');
+          return;
+        }
+        const folders=(await client().listFolder(quickPath)).filter(x=>x['.tag']==='folder');
+        if(sequence!==quickRequest)return;
+        folders.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'pt'));
+        const choices=root.document.createDocumentFragment();
+        for(const f of folders){
+          const button=root.document.createElement('button');
+          button.type='button';
+          button.className='quick-export-folder';
+          button.textContent='📁 '+f.name;
+          button.addEventListener('click',()=>{
+            quickPath=f.path_display;
+            void quickBrowse();
+          });
+          choices.append(button);
+        }
+        quickFolderList.append(choices);
+        if(!folders.length) {
+          const empty=root.document.createElement('p');
+          empty.textContent='Esta pasta não contém subpastas.';
+          quickFolderList.append(empty);
+        }
+        quickMessage('Escolhe uma pasta ou toca em «Guardar nesta pasta».');
+      }catch(err){
+        if(sequence===quickRequest)quickMessage('Não foi possível consultar as pastas: '+db.userMessage(err));
+      }
+    }
+    function quickOpen(id){
+      selectedId=id;
+      const note=id&&getNote(id);
+      if(!note||note.deletedAt){say('Abre uma nota antes de a exportar.');return;}
+      if(box.open)box.close();
+      quickRequest++;
+      quickPath='';
+      quickLocationText();
+      quickFormat.value=['md','html','txt'].includes(localStorage.getItem(formatKey))?localStorage.getItem(formatKey):'md';
+      $('quick-export-note').textContent='Nota: '+(note.title||'Sem título');
+      quickMessage('Escolhe onde guardar ou partilhar esta nota.');
+      quickDialog.showModal();
+      void quickBrowse();
+    }
+    async function quickCreateFolder(){
+      if(quickBusy)return;
+      const input=$('quick-export-new-folder');
+      const name=input.value.trim();
+      if(!name||name==='.'||name==='..'||name.includes('/')||name.includes('\\')||
+        /[\u0000-\u001f]/.test(name)) {
+        quickMessage('Introduz um nome de pasta válido, sem barras.');return;
+      }
+      quickBusy=true;
+      try{
+        if(!await readyDropbox())throw new Error('Autoriza primeiro o Dropbox.');
+        const path=(quickPath||'')+'/'+name;
+        await client().ensureFolder(path);
+        input.value='';
+        quickPath=path;
+        await quickBrowse();
+        quickMessage('Pasta criada. Podes guardar a nota nesta localização.');
+      }catch(err){quickMessage('Não foi possível criar a pasta: '+db.userMessage(err));}
+      finally{quickBusy=false;}
+    }
+    async function quickSave(){
+      if(quickBusy)return;
+      quickBusy=true;
+      $('quick-export-save').disabled=true;
+      try{
+        const exportFile=quickExport();
+        if(!await readyDropbox())throw new Error('Autoriza primeiro o Dropbox ou utiliza a partilha do Android.');
+        const folder=quickPath;
+        const full=(folder||'')+'/'+exportFile.name;
+        const map=readableMap();
+        const previous=map[full];
+        if(previous&&previous.noteId!==selectedId)
+          throw new Error('O destino pertence a uma nota diferente.');
+        quickMessage('A guardar o ficheiro na pasta selecionada…');
+        const remote=client();
+        if(folder)await remote.ensureFolder(folder);
+        let result;
+        try{result=await remote.upload(full,exportFile.data,previous?.rev||null);}
+        catch(err){
+          // Unknown existing exports are not overwritten without explicit review.
+          if(err.status!==409||previous)throw err;
+          const metadata=await remote.metadata(full);
+          const original=await remote.download(full);
+          if(original===exportFile.data){
+            result=metadata; // Same file; merely adopt its known revision.
+          }else if(root.confirm('Já existe uma cópia desta nota nessa pasta. Atualizar o mesmo ficheiro, preservando a revisão anterior no histórico Dropbox?')){
+            result=await remote.upload(full,exportFile.data,metadata.rev);
+          }else{
+            quickMessage('O ficheiro existente foi preservado. Escolhe outra pasta ou formato.');
+            return;
+          }
+        }
+        map[full]={noteId:selectedId,rev:result.rev,exportedAt:new Date().toISOString()};
+        try{localStorage.setItem(readableKey,JSON.stringify(map));}catch(_){}
+        try{
+          localStorage.setItem(formatKey,quickFormat.value);
+          localStorage.setItem(folderKey,folder);
+        }catch(_){}
+        quickMessage('Nota guardada no Dropbox: '+full);
+      }catch(err){quickMessage('Não foi possível guardar: '+db.userMessage(err));}
+      finally{quickBusy=false;$('quick-export-save').disabled=false;}
+    }
+    function quickDownload(){
+      try{
+        const data=quickExport();
+        const blob=new root.Blob([data.data],{type:data.mime});
+        const href=root.URL.createObjectURL(blob);
+        const anchor=root.document.createElement('a');
+        anchor.href=href;anchor.download=data.name;
+        root.document.body.append(anchor);anchor.click();anchor.remove();
+        root.setTimeout(()=>root.URL.revokeObjectURL(href),10000);
+        quickMessage('Transferência iniciada: '+data.name);
+      }catch(err){quickMessage('Não foi possível guardar no dispositivo: '+(err.message||'erro'));}
+    }
+    function quickShareText(){
+      try{
+        const note=quickNote();
+        const text=readable.markdown(note,currentUrl,owner);
+        const share={title:note.title||'Nota',text};
+        if(typeof navigator.share==='function'){
+          // Call in the original click task for Android's user-gesture requirement.
+          Promise.resolve(navigator.share(share)).then(()=>
+            quickMessage('Conteúdo entregue ao menu de partilha do dispositivo.')
+          ).catch(err=>{
+            if(err.name!=='AbortError')quickMessage('Partilha não concluída: '+err.message);
+          });
+        }else if(navigator.clipboard?.writeText){
+          navigator.clipboard.writeText(text).then(()=>
+            quickMessage('Conteúdo copiado. Cola-o no WhatsApp ou email.')
+          ).catch(()=>quickMessage('A partilha não está disponível neste navegador.'));
+        }else quickMessage('Este navegador não permite partilhar diretamente. Escolhe «Enviar ficheiro» ou «Guardar no dispositivo».');
+      }catch(err){quickMessage(err.message||'Não foi possível partilhar.');}
+    }
+    function quickShareFile(){
+      try{
+        const exported=quickExport();
+        const file=new root.File([exported.data],exported.name,{type:exported.mime});
+        if(typeof navigator.share!=='function'){
+          quickMessage('Este navegador não suporta a partilha nativa de ficheiros. Utiliza «Guardar no dispositivo».');
+          return;
+        }
+        if(typeof navigator.canShare==='function'&&!navigator.canShare({files:[file]})){
+          quickMessage('Esta aplicação não suporta partilhar o tipo de ficheiro escolhido. Experimenta Markdown ou partilha o conteúdo.');
+          return;
+        }
+        Promise.resolve(navigator.share({title:exported.name,files:[file]}))
+          .then(()=>quickMessage('Ficheiro entregue à aplicação escolhida.'))
+          .catch(err=>{if(err.name!=='AbortError')quickMessage('Não foi possível enviar o ficheiro: '+err.message);});
+      }catch(err){quickMessage(err.message||'Não foi possível partilhar o ficheiro.');}
+    }
     function open(id,mode) {
       if (getCurrentOwner() !== owner) return;
+      if(mode==='export'){quickOpen(id);return;}
       selectedId = id || null;
       const note = id && getNote(id);
       $('dropbox-selected-note').textContent = note ? 'Nota: ' + (note.title || 'Sem título') : 'Escolha uma nota primeiro';
@@ -486,7 +680,7 @@
       if(!id)throw new Error('Abra primeiro uma nota para exportar');
       if(!ensureSaved(id))throw new Error('Guarde primeiro as alterações da nota');
       const note=currentNote();
-      const format=readableFormat.value==='html'?'html':'md';
+      const format=['md','html','txt'].includes(readableFormat.value)?readableFormat.value:'md';
       return readable.make(note,format,currentUrl,owner);
     }
     async function exportReadable() {
@@ -572,6 +766,24 @@
     }
     $('dropbox-btn').addEventListener('click', () => open(getActiveId()));
     $('dropbox-close').addEventListener('click', close);
+    $('quick-export-close').addEventListener('click',()=>quickDialog.close());
+    $('quick-export-up').addEventListener('click',()=>{
+      quickPath=quickPath.slice(0,quickPath.lastIndexOf('/'));
+      void quickBrowse();
+    });
+    $('quick-export-refresh').addEventListener('click',()=>void quickBrowse());
+    $('quick-export-mkdir').addEventListener('click',()=>void quickCreateFolder());
+    $('quick-export-save').addEventListener('click',()=>void quickSave());
+    $('quick-export-download').addEventListener('click',quickDownload);
+    $('quick-export-share-text').addEventListener('click',quickShareText);
+    $('quick-export-share-file').addEventListener('click',quickShareFile);
+    $('quick-export-open-original').addEventListener('click',()=>{
+      const id=selectedId;quickDialog.close();
+      if(id && getNote(id))openNote(id);
+    });
+    quickConnect.addEventListener('click',()=>{
+      void connect().catch(err=>quickMessage('Não foi possível autorizar: '+db.userMessage(err)));
+    });
     const events = [
       ['dropbox-connect',connect],
       ['dropbox-disconnect',disconnect],
@@ -609,10 +821,21 @@
       root.setInterval(refreshOnReturn,60000);
     }
     root.addEventListener('notas:private-locked', () => {
-      oauth?.disconnect();
+      // Security: suspend the active session, but keep the encrypted browser
+      // authorization. Only explicit "Desligar Dropbox" removes its vault.
+      oauth?.suspend?.();
       for (const timer of pending.values()) clearTimeout(timer);
       pending.clear();
       waiting.clear();
+      quickRequest++;
+      if(quickDialog.open)quickDialog.close();
+    });
+    root.addEventListener('notas:private-authorized', () => {
+      if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)return;
+      if(!keyInput.value.trim())return;
+      void makeAuth().restorePersistent().then(ok=>{
+        if(ok)retryMapped();
+      }).catch(()=>{});
     });
     if (oauth?.connected()) setTimeout(retryMapped, 0);
     return Object.freeze({open, queue, resume, retryMapped, syncPrimary,

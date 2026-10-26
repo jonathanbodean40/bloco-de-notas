@@ -12,3 +12,31 @@
 #dropbox-readable-status{font-size:13px;overflow-wrap:anywhere;color:#285b65}
 #dropbox-export-readable,#dropbox-download-readable{white-space:normal;line-height:1.3;min-height:42px}
 @media(max-width:600px){.dropbox-readable-export{padding:12px}.dropbox-readable-export .dialog-actions button{width:100%;justify-content:center}}
+/* Exportação rápida: seletor de pastas Dropbox e partilha nativa Android. */
+dialog.quick-export-dialog{width:min(620px,calc(100vw - 22px));max-width:620px;max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;box-sizing:border-box;padding:18px 20px 22px;border:1px solid #d4e0e6;border-radius:15px;background:#fff;color:#263b48;box-shadow:0 12px 45px #203a5040}
+.quick-export-dialog::backdrop{background:#142c3b78}
+.quick-export-dialog .dialog-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+.quick-export-dialog h2{font-size:20px;margin:0}
+.quick-export-dialog h3{font-size:16px;margin:0 0 6px}
+.quick-export-dialog .quick-export-note{font-size:14px;color:#566e79;margin:8px 0 13px;overflow-wrap:anywhere}
+.quick-export-formats label{display:block;font-size:13px;font-weight:600;margin:8px 0}
+.quick-export-formats select{display:block;width:100%;min-height:42px;border:1px solid #c9d7e0;border-radius:8px;background:#fff;color:#263b48;padding:8px 10px;font:inherit}
+.quick-export-folders,.quick-export-share{margin-top:15px;padding:13px;border:1px solid #d9e3e9;border-radius:12px;background:#f9fbfd}
+.quick-export-hint{font-size:12px;color:#607682;line-height:1.5;margin:5px 0 12px}
+.quick-export-location{display:flex;align-items:center;gap:7px;margin:8px 0;min-width:0}
+.quick-export-location strong{flex:1;min-width:0;overflow-wrap:anywhere;font-size:13px}
+.quick-export-location button,.quick-export-actions button{min-height:42px;border:1px solid #bed0da;border-radius:8px;padding:9px 12px;background:#fff;color:#245366;font:inherit;font-size:13px}
+.quick-export-location button:disabled,.quick-export-actions button:disabled{opacity:.5;cursor:default}
+.quick-export-location input{flex:1;min-width:0;min-height:41px;border:1px solid #bdcfd9;border-radius:8px;padding:8px 10px;background:#fff;font:inherit;font-size:13px}
+.quick-export-folder-list{display:flex;flex-direction:column;gap:5px;max-height:235px;min-height:60px;overflow-y:auto;padding:5px;border:1px solid #dee6ed;border-radius:8px;background:white}
+.quick-export-folder-list button{width:100%;text-align:left;border:0;border-bottom:1px solid #eef2f4;padding:10px;background:white;font:inherit;font-size:14px;color:#2d5364;min-height:39px;overflow-wrap:anywhere}
+.quick-export-folder-list button:hover,.quick-export-folder-list button:focus-visible{background:#e9f5fa}
+.quick-export-folder-list p{font-size:12px;color:#61727a;margin:10px}
+.quick-export-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+#quick-export-save{background:#176785;color:white;border-color:#176785;flex:1}
+#quick-export-share-text{background:#eef7f8}
+#quick-export-connect{width:100%}
+#quick-export-open-original{margin-top:10px;width:100%;min-height:43px;background:#fff;border:1px solid #aac5d1;border-radius:9px;font:inherit;font-size:13px;color:#17566d}
+#quick-export-status{font-size:13px;line-height:1.5;color:#245667;min-height:25px;margin:15px 0 8px;overflow-wrap:anywhere}
+.quick-export-dialog>small{display:block;font-size:11px;line-height:1.5;color:#73818a}
+@media(max-width:520px){dialog.quick-export-dialog{padding:14px 12px 20px}.quick-export-location{flex-wrap:wrap}.quick-export-folder-list{max-height:210px}.quick-export-actions{flex-direction:column}.quick-export-actions button{width:100%;text-align:center}.quick-export-location input{flex-basis:150px}}

@@ -478,6 +478,13 @@ async function verifyManualDropboxFolder(page) {
       requests.push({endpoint,path:args.path,mode:args.mode});
       const respond=(data,status=200)=>new Response(JSON.stringify(data),{status});
       const missing=()=>respond({error_summary:'path/not_found/...'},409);
+      if(endpoint.endsWith('/list_folder')){
+        const prefix=args.path ? args.path+'/' : '/';
+        const items=[...folders].filter(name=>name && name.startsWith(prefix) &&
+          !name.slice(prefix.length).includes('/'))
+          .map(name=>({'.tag':'folder',name:name.split('/').at(-1),path_display:name}));
+        return respond({entries:items,has_more:false});
+      }
       if(endpoint.endsWith('/get_metadata')){
         if(folders.has(args.path))return respond({'.tag':'folder',path_display:args.path});
         if(files.has(args.path))return respond({'.tag':'file',rev:files.get(args.path).rev});
@@ -546,7 +553,7 @@ async function verifyManualDropboxFolder(page) {
   });
   check(mdExport.folder&&mdExport.count===1,'export: arbitrary nested Dropbox folder created');
   check(mdExport.name.endsWith('--synthetic-note-a.md'),'export: readable Markdown filename includes stable note ID');
-  check(mdExport.data.includes('Abrir nota original para editar'),'export: exported Markdown links to editable original');
+  check(mdExport.data.includes('EDITAR ESTA NOTA NO BLOCO DE NOTAS PRO'),'export: exported Markdown links to editable original');
   check(mdExport.data.includes('conteúdo sintético alpha'),'export: exported note contains original text');
   await page.locator('#dropbox-export-readable').click();
   await page.waitForFunction(()=>window.__manualDropbox.requests.filter(r=>r.endpoint.endsWith('/upload')).length===4,{timeout:10000});
@@ -567,8 +574,61 @@ async function verifyManualDropboxFolder(page) {
   check(htmlExport.count===1&&htmlExport.html.includes('<!doctype html>'),
     'export: optional HTML document created for local browser opening');
   check(htmlExport.files===3,'export: canonical JSON backup plus Markdown and HTML, no duplicate');
-  return {hasFolder:first.hasFolder,fileCount:htmlExport.files,updates:after.updates,
-    readableFiles:['md','html'],exportedInto:'/Arquivo Pessoal/Onyx Links'};
+  await page.locator('#dropbox-close').click();
+  await page.setViewportSize({width:393,height:852});
+  await page.evaluate(()=>{
+    window.__sharedPayloads=[];
+    Object.defineProperty(navigator,'share',{configurable:true,value:data=>{
+      window.__sharedPayloads.push({title:data.title,text:data.text||'',
+        fileNames:(data.files||[]).map(file=>file.name)});
+      return Promise.resolve();
+    }});
+    Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+  });
+  await page.locator('[data-window="export"]').first().click();
+  await page.waitForFunction(()=>{
+    const dialog=document.querySelector('#quick-export-dialog'),s=document.querySelector('#quick-export-status');
+    return dialog.open&&s.textContent.startsWith('Escolhe uma pasta');
+  },{timeout:12000});
+  check((await page.locator('#quick-export-path').innerText())==='Dropbox /',
+    'quick export: export icon opens directly into Dropbox root folder picker');
+  const mobile=await page.locator('#quick-export-dialog').evaluate(el=>{
+    const rect=el.getBoundingClientRect();
+    return {width:rect.width,height:rect.height,overflow:getComputedStyle(el).overflowY};
+  });
+  check(mobile.width<=393&&mobile.height<=852 && mobile.overflow==='auto',
+    'quick export: full folder picker fits the POCO mobile viewport');
+  await page.locator('.quick-export-folder').filter({hasText:'Arquivo Pessoal'}).click();
+  await page.locator('.quick-export-folder').filter({hasText:'Onyx Links'}).click();
+  check((await page.locator('#quick-export-path').innerText())==='Dropbox/Arquivo Pessoal/Onyx Links',
+    'quick export: navigate folders from Dropbox root without technical panel');
+  await page.locator('#quick-export-format').selectOption('txt');
+  await page.locator('#quick-export-save').click();
+  await page.waitForFunction(()=>document.querySelector('#quick-export-status').textContent.startsWith('Nota guardada no Dropbox:'),{timeout:12000});
+  const quickSaved=await page.evaluate(()=>{
+    const m=window.__manualDropbox;
+    const files=[...m.files.entries()].filter(([path])=>path.endsWith('.txt'));
+    return {count:files.length,path:files[0]?.[0],body:files[0]?.[1]?.raw,
+      canonicalCount:[...m.files.keys()].filter(path=>path.endsWith('.keepnote.json')).length};
+  });
+  check(quickSaved.count===1&&quickSaved.path.startsWith('/Arquivo Pessoal/Onyx Links/'),
+    'quick export: one-click save creates independent editable text file in selected Dropbox folder');
+  check(quickSaved.body.includes('conteúdo sintético alpha') && quickSaved.body.includes('note=synthetic-note-a'),
+    'quick export: editable text copy contains contents and edit-original URL');
+  check(quickSaved.canonicalCount===1,'quick export: canonical synced note remains untouched');
+  await page.locator('#quick-export-share-text').click();
+  await page.locator('#quick-export-share-file').click();
+  await page.waitForFunction(()=>window.__sharedPayloads.length===2);
+  const shared=await page.evaluate(()=>window.__sharedPayloads);
+  check(shared[0].text.includes('note=synthetic-note-a') && shared[0].fileNames.length===0,
+    'quick export: Android share sheet can send note text and edit link to WhatsApp or email');
+  check(shared[1].fileNames.length===1&&shared[1].fileNames[0].endsWith('.txt'),
+    'quick export: Android share sheet can send editable file attachment');
+  const noNewCanon=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).length,storageKey);
+  check(noNewCanon===notes.length,'quick export: local notes preserved byte-for-byte');
+  await page.locator('#quick-export-close').click();
+  return {hasFolder:first.hasFolder,fileCount:quickSaved.count+htmlExport.files,updates:after.updates,
+    readableFiles:['md','html','txt'],exportedInto:'/Arquivo Pessoal/Onyx Links',mobile};
 }
 
 async function blockedCase(name, sessionMode, rpcResult) {

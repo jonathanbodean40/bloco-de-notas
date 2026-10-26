@@ -13,7 +13,7 @@ function safeUrl(s){
 }
 function safeImage(src){return typeof src==='string'&&(/^(data:image\/(?:png|jpeg|webp|gif|avif);base64,[a-z0-9+/=\s]+)$/i.test(src)||(/^https?:/i.test(src)&&!!safeUrl(src)));}
 function filename(note,format){
- validate(note);if(!['md','html'].includes(format))throw new TypeError('Formato inválido');
+ validate(note);if(!['md','html','txt'].includes(format))throw new TypeError('Formato inválido');
  const title=String(note.title||'Sem título').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9 _-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,75)||'Nota';
  const id=note.id.replace(/[^A-Za-z0-9_-]/g,'-').slice(0,90);
  return title+'--'+id+'.'+format;
@@ -74,7 +74,7 @@ function mdNode(node){
 function markdown(note,base,scope){
  validate(note);const out=['# '+mdEscape(note.title||'Sem título'),'',
  'Cópia legível · última alteração: '+String(note.updatedAt||''),'',
- '[Abrir nota original para editar](<'+link(base,scope,note)+'>)',''];
+ '✏ [EDITAR ESTA NOTA NO BLOCO DE NOTAS PRO](<'+link(base,scope,note)+'>)',''];
  for(const section of sections(note)){
   if(section.label)out.push('## '+mdEscape(section.label),'');
   if(section.node){const body=childMD(section.node).replace(/\n{3,}/g,'\n\n').trim();if(body)out.push(body,'');}
@@ -117,7 +117,21 @@ function html(note,base,scope){
   escapeHTML(title)+'</h1><p><small>Última alteração: '+escapeHTML(note.updatedAt||'')+
   '</small></p><p><a href="'+escapeHTML(link(base,scope,note))+'" rel="noopener noreferrer" target="_blank">Abrir a nota original para editar</a></p></header><main>'+parts+'</main></body></html>';
 }
-function make(note,format,base,scope){return{name:filename(note,format),data:format==='md'?markdown(note,base,scope):html(note,base,scope),mime:format==='md'?'text/markdown;charset=utf-8':'text/html;charset=utf-8'};}
+function plainText(note,base,scope){
+  const body=markdown(note,base,scope)
+    .replace(/\[(.+?)\]\(<([^>]+)>\)/g,'$1: $2')
+    .replace(/^#{1,6} +/gm,'')
+    .replace(/\*\*/g,'')
+    .replace(/\\([\\`*_{}\[\]#|])/g,'$1');
+  return body;
+}
+function make(note,format,base,scope){
+  validate(note);
+  if(!['md','html','txt'].includes(format))throw new TypeError('Formato inválido');
+  const data=format==='html'?html(note,base,scope):format==='txt'?plainText(note,base,scope):markdown(note,base,scope);
+  const mime=format==='html'?'text/html;charset=utf-8':format==='txt'?'text/plain;charset=utf-8':'text/markdown;charset=utf-8';
+  return{name:filename(note,format),data,mime};
+}
 const api=Object.freeze({filename,safeUrl,make,markdown,html});
 if(typeof module!=='undefined'&&module.exports)module.exports=api;
 else root.NotasReadableExport=api;

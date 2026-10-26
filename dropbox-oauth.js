@@ -55,20 +55,29 @@
     connected() {
       try {
         const current = JSON.parse(this.storage.getItem(this.tokensKey) || 'null');
-        return !!(current && (current.refresh_token || (current.access_token && current.expires_at > Date.now())));
+        return !!(current && ((typeof current.refresh_token==='string' && current.refresh_token) ||
+          (typeof current.access_token==='string' && current.access_token && current.expires_at > Date.now())));
       } catch (_) { return false; }
     }
-    disconnect() {
+    suspend() {
+      // Temporary Notes Pro lock should not revoke the remembered Dropbox
+      // authorization. Tokens remain encrypted at rest in IndexedDB and the
+      // authenticated Notes Pro account is required to restore access.
       this.storage.removeItem(this.tokensKey);
       this.storage.removeItem(this.pendingKey);
+    }
+    disconnect() {
+      this.suspend();
       this.vault?.forget(this.owner,this.appKey).catch(() => {});
     }
     async restorePersistent() {
       if (this.connected() || !this.vault) return this.connected();
-      let refreshToken;
-      try { refreshToken=await this.vault.restore(this.owner,this.appKey); }
+      let saved;
+      try { saved=await this.vault.restore(this.owner,this.appKey); }
       catch(err){this.persistentError=err.message;return false;}
-      if (!refreshToken) return false;
+      // Older vaults returned a string; newer vaults return an object.
+      const refreshToken=typeof saved==='string'?saved:saved?.refreshToken;
+      if (typeof refreshToken!=='string' || !refreshToken) return false;
       this.storage.setItem(this.tokensKey,JSON.stringify({
         access_token:'',refresh_token:refreshToken,expires_at:0
       }));

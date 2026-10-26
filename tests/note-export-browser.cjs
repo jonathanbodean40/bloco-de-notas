@@ -28,6 +28,7 @@ test('exportação Markdown e HTML preserva hiperligações Onyx e bloqueia scri
    const e=window.NotasReadableExport;
    const md=e.make(note,'md',base,'synthetic-owner');
    const html=e.make(note,'html',base,'synthetic-owner');
+   const txt=e.make(note,'txt',base,'synthetic-owner');
    const documentHTML=new DOMParser().parseFromString(html.data,'text/html');
    const unsafeNote={id,title:'<img src=x onerror=alert(1)>',content:
      '<div data-notas-pro="3"><div data-note-body><p>Seguro <img src=x onerror="alert(1)">'+
@@ -38,6 +39,8 @@ test('exportação Markdown e HTML preserva hiperligações Onyx e bloqueia scri
    return {
      nameMD:md.name,nameHTML:html.name,
      mdText:md.data,
+     txtName:txt.name,txtEditable:txt.data.includes('note='+id)&&txt.data.includes('Planeamento:')&&txt.data.includes('Hirsch.html'),
+     txtMime:txt.mime,
      imagePresent:html.data.includes(png),
      linkPresent:documentHTML.querySelector('main a')?.href===link,
      originalEditLink:documentHTML.querySelector('header a')?.href.includes('note='+id),
@@ -52,6 +55,9 @@ test('exportação Markdown e HTML preserva hiperligações Onyx e bloqueia scri
   });
   assert.equal(results.validFolderExportName,true);
   assert.ok(results.nameHTML.endsWith('.html'));
+  assert.ok(results.txtName.endsWith('.txt'));
+  assert.equal(results.txtEditable,true);
+  assert.ok(results.txtMime.startsWith('text/plain'));
   assert.equal(results.linkPresent,true);
   assert.equal(results.originalEditLink,true);
   assert.equal(results.htmlScriptCount,0);

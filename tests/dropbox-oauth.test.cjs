@@ -51,3 +51,48 @@ test('renova sessões vencidas apenas no armazenamento da aba',async()=>{
   assert.equal(await oauth.getToken(),'synthetic-new-access');
   assert.equal(await oauth.getToken(),'synthetic-new-access');
 });
+test('recupera autorização persistente e não pede login em cada nova sessão',async()=>{
+  const saved=storage();
+  const calls=[];
+  const vault={
+    async restore(){calls.push('restore');return {refreshToken:'saved-refresh-token',accountId:'synthetic-account'};},
+    async forget(){calls.push('forget');}
+  };
+  globalThis.NotasDropboxTokenVault=vault;
+  try{
+    const oauth=new DropboxOAuth({owner,appKey,storage:saved,location,fetchImpl:async(url,options)=>{
+      const form=new URLSearchParams(options.body);
+      assert.equal(form.get('grant_type'),'refresh_token');
+      assert.equal(form.get('refresh_token'),'saved-refresh-token');
+      return reply({access_token:'refreshed-access',expires_in:14400});
+    }});
+    assert.equal(await oauth.restorePersistent(),true);
+    assert.equal(await oauth.getToken(),'refreshed-access');
+    oauth.suspend();
+    assert.equal(oauth.connected(),false);
+    assert.equal(calls.includes('forget'),false,'Bloqueio temporário não deve eliminar o vault');
+    assert.equal(await oauth.restorePersistent(),true);
+    assert.equal(await oauth.getToken(),'refreshed-access');
+    oauth.disconnect();
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(calls.includes('forget'),true,'Só desligar explicitamente elimina o vault');
+  }finally{delete globalThis.NotasDropboxTokenVault;}
+});
+test('sessão antiga com refresh_token objeto é recusada e recuperada do vault',async()=>{
+  const saved=storage();
+  const bad='notas-pro-dropbox-pkce-v1:'+owner+':'+appKey+':tokens';
+  saved.setItem(bad,JSON.stringify({refresh_token:{refreshToken:'broken-old'}}));
+  globalThis.NotasDropboxTokenVault={
+    async restore(){return {refreshToken:'correct-stored-token'};},
+    async forget(){}
+  };
+  try{
+    const oauth=new DropboxOAuth({owner,appKey,storage:saved,location,fetchImpl:async(url,options)=>{
+      assert.equal(new URLSearchParams(options.body).get('refresh_token'),'correct-stored-token');
+      return reply({access_token:'recovered',expires_in:14400});
+    }});
+    assert.equal(oauth.connected(),false);
+    assert.equal(await oauth.restorePersistent(),true);
+    assert.equal(await oauth.getToken(),'recovered');
+  }finally{delete globalThis.NotasDropboxTokenVault;}
+});
