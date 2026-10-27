@@ -48,6 +48,7 @@
     <button id="account-btn">Conta</button>
     <button id="dropbox-btn" type="button" title="Dropbox (ferramentas internas)" hidden>Dropbox</button>
     <button id="sync-icon-btn" aria-label="Sincronizar" title="Sincronizar">⟳</button>
+    <button id="dropbox-review-button" type="button" hidden aria-controls="dropbox-conflict-review-dialog" aria-haspopup="dialog">Resolver conflito Dropbox</button>
     <span id="save-status" role="status" aria-live="polite"></span>
   </footer>
   <dialog id="auth-dialog">
@@ -152,7 +153,6 @@
       <h3 id="dropbox-primary-title">Armazenamento principal e cópias de segurança</h3>
       <p>Modo local-first: a escrita continua imediata no dispositivo; o Dropbox recebe as notas em segundo plano, com histórico de revisões. O Supabase permanece como cópia adicional.</p>
       <p id="dropbox-primary-status" role="status" aria-live="polite">Modo principal ainda não ativado.</p>
-      <div id="dropbox-conflicts" class="dropbox-conflict-list" aria-live="polite"></div>
       <p id="dropbox-activation-feedback" class="dropbox-activation-feedback" role="status" aria-live="polite" data-state="info">Antes de ativar no POCO, verifica as divergências. Esta análise não altera notas.</p>
       <div class="dialog-actions">
         <button type="button" id="dropbox-inspect-conflicts">Verificar conflitos</button>
@@ -162,6 +162,16 @@
       <small>Antes da ativação, todas as notas devem estar sincronizadas. Se houver versões divergentes, a migração é bloqueada sem apagar conteúdo. Após a ativação, o botão «Guardar cópia» permite escolher outra pasta, mantendo a versão anterior recuperável.</small>
     </section>
     <small>As pastas são navegáveis diretamente nesta aplicação. Abrir ficheiros .keepnote.json com um toque a partir da aplicação Dropbox depende do sistema operativo e não é garantido.</small>
+  </dialog>
+  <dialog id="dropbox-conflict-review-dialog" class="dropbox-conflict-review-dialog" aria-labelledby="dropbox-conflict-review-title">
+    <div class="dialog-heading">
+      <h2 id="dropbox-conflict-review-title">Resolver conflitos de sincronização</h2>
+      <button id="dropbox-conflict-review-close" type="button" aria-label="Fechar comparação">✕</button>
+    </div>
+    <p>Há alterações diferentes em dois dispositivos. Nenhuma versão será substituída sem a tua autorização.</p>
+    <p id="dropbox-conflict-review-status" role="status" aria-live="polite"></p>
+    <div id="dropbox-conflicts" class="dropbox-conflict-list" aria-live="polite"></div>
+    <button id="dropbox-conflict-review-refresh" type="button">Verificar novamente (apenas leitura)</button>
   </dialog>
   <dialog id="note-share-dialog" class="note-share-dialog" aria-labelledby="note-share-title">
     <div class="dialog-heading">

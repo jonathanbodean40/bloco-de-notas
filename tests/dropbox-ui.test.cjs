@@ -107,6 +107,11 @@ test('comparação de conflito mostra ambas as versões sem substituir notas',as
   const h=harness(file,raw,stub);
   h.imported.push(local);
   await h.instance.syncPrimary();
+  assert.equal(h.element('dropbox-review-button').hidden,false,
+    'Um conflito mostra o botão de revisão sem abrir definições técnicas.');
+  assert.match(h.element('dropbox-review-button').textContent,/Resolver 1 conflito/);
+  await h.element('dropbox-review-button').click();
+  assert.equal(h.element('dropbox-conflict-review-dialog').open,true);
   const rows=h.element('dropbox-conflicts').children;
   assert.equal(rows.length,2);
   assert.match(rows[0].textContent,/1 nota\(s\) com divergências/);
@@ -114,8 +119,10 @@ test('comparação de conflito mostra ambas as versões sem substituir notas',as
   assert.match(label.textContent,/Sem título/);
   assert.match(label.textContent,/the|synthetic-id|etic-id/i);
   assert.equal(preview.hidden,true);
+  assert.equal(action.disabled,true,'Não se deve resolver antes de comparar.');
   await inspect.click();
   assert.equal(preview.hidden,false);
+  assert.equal(action.disabled,false);
   assert.equal(preview.children.length,3);
   assert.match(preview.children[0].textContent,/Prévia textual resumida/);
   assert.match(preview.children[1].children[2].textContent,/Esta edição local/);
@@ -128,7 +135,9 @@ test('comparação de conflito mostra ambas as versões sem substituir notas',as
   await preferDropbox.click();
   assert.deepEqual(resolves,[note.id]);
   assert.match(h.element('dropbox-status').textContent,/preservada como nota/);
-  assert.equal(rows[1].removed,true);
+  assert.equal(h.element('dropbox-conflicts').children.length,0);
+  assert.equal(h.element('dropbox-review-button').hidden,true);
+  assert.match(h.element('dropbox-conflict-review-status').textContent,/preservada como nota/);
   assert.equal(h.imported[0].content,local.content);
 });
 
@@ -253,4 +262,51 @@ test('dois toques rápidos nunca iniciam duas verificações de ativação',asyn
   finishCheck({conflicts:[{id:note.id,message:'Divergência'}],missingRemote:0,missingLocal:0});
   await nextTurn();
   assert.equal(h.element('dropbox-enable-primary').disabled,false);
+});
+
+test('acesso de resolução só aparece com divergências e volta a comparar sem escrever dados',async()=>{
+  const local={...note,content:'<p>Versão POCO</p>'};
+  const remote={...note,content:'<p>Versão na nuvem</p>'};
+  const calls=[];
+  const stub={Primary:class {
+    enabled(){return true;}
+    async reconcile(){calls.push('sync');return {conflicts:[{id:note.id,message:'Versões diferentes'}],pushed:0,pulled:0};}
+    async previewDifferences(){calls.push('read-only');return {conflicts:[{id:note.id,message:'Versões diferentes'}],missingLocal:0,missingRemote:0};}
+    async inspectConflict(id){calls.push('inspect');assert.equal(id,note.id);return {local,remote};}
+    async resolveWithLocal(){calls.push('UNEXPECTED_WRITE');throw Error('Não permitido');}
+    async resolveWithRemote(){calls.push('UNEXPECTED_WRITE');throw Error('Não permitido');}
+  }};
+  const h=harness(file,raw,stub);
+  h.imported.push(local);
+  assert.notEqual(h.element('dropbox-review-button').hidden,false,'O acesso não deve surgir antes de conflito.');
+  await h.instance.syncPrimary();
+  assert.equal(h.element('dropbox-review-button').hidden,false);
+  await h.element('dropbox-review-button').click();
+  assert.equal(h.element('dropbox-conflict-review-dialog').open,true);
+  assert.equal(h.element('dropbox-dialog').open,undefined,'O painel técnico permanece fechado.');
+  const rows=h.element('dropbox-conflicts').children;
+  assert.equal(rows.length,2);
+  const action=rows[1].children[3],chooseCloud=rows[1].children[4];
+  assert.equal(action.disabled,true);
+  assert.equal(chooseCloud.disabled,true);
+  await h.element('dropbox-conflict-review-refresh').click();
+  await nextTurn();
+  assert.deepEqual(calls,['sync','read-only']);
+  assert.match(h.element('dropbox-conflict-review-status').textContent,/1 nota\(s\) com diferenças/);
+  assert.equal(h.element('dropbox-review-button').hidden,false);
+  assert.deepEqual(h.imported,[local]);
+  await h.element('dropbox-conflict-review-close').click();
+  assert.equal(h.element('dropbox-conflict-review-dialog').open,false);
+  assert.ok(!calls.includes('UNEXPECTED_WRITE'));
+});
+test('a sincronização sem conflitos esconde o botão de revisão',async()=>{
+  const stub={Primary:class {
+    enabled(){return true;}
+    async reconcile(){return {conflicts:[],pushed:0,pulled:0};}
+  }};
+  const h=harness(file,raw,stub);
+  h.imported.push({...note});
+  await h.instance.syncPrimary();
+  assert.equal(h.element('dropbox-review-button').hidden,true);
+  assert.equal(h.element('dropbox-conflicts').children.length,0);
 });

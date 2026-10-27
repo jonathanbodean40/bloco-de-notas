@@ -487,7 +487,83 @@ async function verifyPrimaryMode(page) {
   });
   check(mobile.width<=393&&mobile.height<=852&&mobile.overflowY==='auto',
     'dropbox-primary: settings dialog remains scrollable on narrow mobile viewport');
-  return {...result,tokenVault,mobile};
+  // Real browser interaction with synthetic notes: two independent edits
+  // must create a conflict, expose the repair button and permit READ-ONLY
+  // comparison without opening the old technical Dropbox panel.
+  await page.locator('#dropbox-close').click();
+  await page.evaluate(()=>document.querySelector('#close-sidebar-btn').click());
+  const editor=page.locator('.note-editor').first();
+  await editor.waitFor({state:'visible'});
+  await editor.fill('Texto fictício alterado localmente no POCO');
+  await page.locator('[data-window="save"]').first().click();
+  const editedId=await page.evaluate(key=>{
+    const all=JSON.parse(localStorage.getItem(key)||'[]');
+    const changed=all.find(item=>String(item.content||'').includes('Texto fictício alterado localmente'));
+    if(changed)return changed.id;
+    return Object.keys(localStorage).filter(k=>k.startsWith(key+':entry:'))
+      .map(k=>JSON.parse(localStorage.getItem(k)||'null'))
+      .find(item=>String(item?.content||'').includes('Texto fictício alterado localmente'))?.id||null;
+  },storageKey);
+  check(!!editedId,'dropbox-conflicts: saving a synthetic local edit preserves its note ID');
+  await page.evaluate(id=>window.__dropboxSynthetic.changeRemote(
+    id,'<p>Texto fictício diferente no Dropbox</p>','2026-10-24T14:10:00.000Z'),editedId);
+  await page.locator('#sync-icon-btn').click();
+  await page.waitForFunction(()=>!document.querySelector('#dropbox-review-button').hidden,{timeout:20000});
+  const originalRevision=await page.evaluate(id=>{
+    const fake=window.__dropboxSynthetic.files;
+    const record=JSON.parse(fake.get('/Bloco de Notas Pro/.keep-notes-index.json').body).entries[id];
+    return record.rev;
+  },editedId);
+  check(await page.locator('#dropbox-review-button').isVisible(),
+    'dropbox-conflicts: a repair action becomes visible only when a real divergent edit exists');
+  check(await page.locator('[data-window="share"]').count()===1,
+    'dropbox-conflicts: the single sharing icon is not changed by conflict handling');
+  await page.locator('#dropbox-review-button').click();
+  await page.locator('#dropbox-conflict-review-dialog[open]').waitFor();
+  check(!(await page.locator('#dropbox-dialog').evaluate(element=>element.open)),
+    'dropbox-conflicts: review dialog does not open technical Dropbox settings');
+  check(await page.locator('#dropbox-conflicts > div').count()===1,
+    'dropbox-conflicts: exactly one synthetic divergent note listed');
+  const reviewBounds=await page.locator('#dropbox-conflict-review-dialog').evaluate(el=>{
+    const rect=el.getBoundingClientRect();
+    return {width:rect.width,height:rect.height,overflow:getComputedStyle(el).overflowY};
+  });
+  check(reviewBounds.width<=393 && reviewBounds.height<=852 && reviewBounds.overflow==='auto',
+    'dropbox-conflicts: comparison fits the 393×852 Android viewport');
+  const oldRevisionAfterOpen=await page.evaluate(id=>{
+    const fake=window.__dropboxSynthetic.files;
+    const record=JSON.parse(fake.get('/Bloco de Notas Pro/.keep-notes-index.json').body).entries[id];
+    return record.rev;
+  },editedId);
+  check(oldRevisionAfterOpen===originalRevision,
+    'dropbox-conflicts: merely opening the dialog causes no remote writes');
+  const preferLocal=page.locator('#dropbox-conflicts button').filter({hasText:'Preservar ambas'});
+  check(await preferLocal.isDisabled(),
+    'dropbox-conflicts: resolving is disabled until comparing both versions');
+  await page.locator('#dropbox-conflicts button').filter({hasText:'Comparar as duas versões'}).click();
+  await page.waitForFunction(()=>document.querySelector('.dropbox-conflict-comparison')?.hidden===false,{timeout:10000});
+  const preview=await page.locator('.dropbox-conflict-comparison').innerText();
+  check(preview.includes('Texto fictício alterado localmente') &&
+    preview.includes('Texto fictício diferente no Dropbox'),
+    'dropbox-conflicts: both independent versions are visible for manual decision');
+  check(await preferLocal.isEnabled(),
+    'dropbox-conflicts: resolution becomes available only after manual comparison');
+  await page.locator('#dropbox-conflict-review-close').click();
+  check(!(await page.locator('#dropbox-conflict-review-dialog').evaluate(el=>el.open)),
+    'dropbox-conflicts: closing the review without deciding leaves both versions intact');
+  const unchanged=await page.evaluate(({id,key})=>{
+    const files=window.__dropboxSynthetic.files;
+    const entry=JSON.parse(files.get('/Bloco de Notas Pro/.keep-notes-index.json').body).entries[id];
+    const remote=JSON.parse(files.get(entry.path).body).note.content;
+    const local=JSON.parse(localStorage.getItem(key)||'[]').find(item=>item.id===id)?.content ||
+      JSON.parse(localStorage.getItem(key+':entry:'+id)||'null')?.content||'';
+    return {remote,local,revision:entry.rev};
+  },{id:editedId,key:storageKey});
+  check(unchanged.revision===originalRevision &&
+    unchanged.remote.includes('Texto fictício diferente') &&
+    unchanged.local.includes('Texto fictício alterado localmente'),
+    'dropbox-conflicts: no loss of remote or local contents after read-only comparison');
+  return {...result,tokenVault,mobile,conflictReview:{noteId:editedId,bounds:reviewBounds,unaltered:true}};
 }
 
 async function verifyManualDropboxFolder(page) {

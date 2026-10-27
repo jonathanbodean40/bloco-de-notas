@@ -57,8 +57,24 @@
     });
     const modeStatus = $('dropbox-primary-status');
     const conflictList = $('dropbox-conflicts');
+    const reviewDialog = $('dropbox-conflict-review-dialog');
+    const reviewButton = $('dropbox-review-button');
+    const reviewStatus = $('dropbox-conflict-review-status');
     const activationFeedback = $('dropbox-activation-feedback');
+    let latestConflicts = [];
+    let reviewBusy = false;
     let activationBusy = false;
+    function showConflictControl(conflicts) {
+      latestConflicts=Array.isArray(conflicts)?conflicts.slice():[];
+      reviewButton.hidden=!latestConflicts.length;
+      reviewButton.textContent=latestConflicts.length===1
+        ? 'Resolver 1 conflito Dropbox'
+        : 'Resolver '+latestConflicts.length+' conflitos Dropbox';
+    }
+    function reviewMessage(message) {
+      reviewStatus.textContent=message;
+      say(message);
+    }
     function showActivationFeedback(message,state='info',reveal=false) {
       activationFeedback.textContent=message;
       activationFeedback.dataset.state=state;
@@ -66,7 +82,9 @@
         activationFeedback.scrollIntoView({block:'nearest',behavior:'auto'});
     }
     function renderConflicts(conflicts) {
+      const say=reviewMessage;
       conflictList.replaceChildren();
+      showConflictControl(conflicts);
       if (!Array.isArray(conflicts) || !conflicts.length) return;
       const summary=document.createElement('p');
       summary.textContent=conflicts.length+' nota(s) com divergências por analisar. Nenhuma foi substituída.';
@@ -117,6 +135,8 @@
             }
             preview.hidden=false;
             inspect.textContent='Atualizar comparação';
+            action.disabled=false;
+            chooseDropbox.disabled=false;
           } catch(err) {
             say('Não foi possível comparar as versões: '+(err.message||'erro'));
           } finally { inspect.disabled=false; }
@@ -124,6 +144,7 @@
         const action = document.createElement('button');
         action.type = 'button';
         action.textContent = 'Preservar ambas as versões e usar esta edição';
+        action.disabled=true; // Rever primeiro as duas versões antes de escolher.
         action.addEventListener('click', async () => {
           if (getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized) {
             say('A sessão foi alterada; entre novamente antes de resolver o conflito.');return;
@@ -132,7 +153,7 @@
           action.disabled = true;
           try {
             const resolved = await primary.resolveWithLocal(conflict.id);
-            row.remove();
+            renderConflicts(latestConflicts.filter(item=>item.id!==conflict.id));
             say('Conflito resolvido; versão da nuvem preservada como nota ' + resolved.backupId);
             requestSync?.();
           } catch(err) {
@@ -143,6 +164,7 @@
         const chooseDropbox=document.createElement('button');
         chooseDropbox.type='button';
         chooseDropbox.textContent='Manter versão Dropbox e guardar esta edição como cópia';
+        chooseDropbox.disabled=true; // Não permitir substituir sem comparação explícita.
         chooseDropbox.addEventListener('click',async()=>{
           if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized) {
             say('A sessão foi alterada; entre novamente antes de resolver o conflito.');return;
@@ -151,7 +173,7 @@
           chooseDropbox.disabled=true;
           try {
             const result=await primary.resolveWithRemote(conflict.id);
-            row.remove();
+            renderConflicts(latestConflicts.filter(item=>item.id!==conflict.id));
             say('Conflito resolvido: cópia deste dispositivo preservada como nota '+result.backupId+'.');
             requestSync?.();
           } catch(err){
@@ -160,6 +182,35 @@
           }
         });
         row.append(label,inspect,preview,action,chooseDropbox); conflictList.append(row);
+      }
+    }
+    function openConflictReview() {
+      if(!latestConflicts.length || getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized) return;
+      renderConflicts(latestConflicts); // Mostra a lista já detetada, sem alterar notas.
+      reviewStatus.textContent='Compara a nota local com a versão Dropbox antes de escolher. As duas versões estão preservadas.';
+      reviewDialog.showModal();
+    }
+    async function recheckConflictReview() {
+      if(reviewBusy)return;
+      reviewBusy=true;
+      const refresh=$('dropbox-conflict-review-refresh');
+      refresh.disabled=true;
+      reviewStatus.textContent='A comparar o estado das notas (apenas leitura)…';
+      try {
+        if(!primary.enabled())throw new Error('O Dropbox principal não está ativo neste dispositivo.');
+        if(getCurrentOwner()!==owner || !root.NOTAS_PRIVATE?.authorized)throw new Error('Sessão da conta alterada.');
+        if(!oauth?.connected() && !(await makeAuth().restorePersistent()))
+          throw new Error('A autorização Dropbox precisa de ser renovada.');
+        const report=await primary.previewDifferences();
+        renderConflicts(report.conflicts);
+        reviewStatus.textContent=report.conflicts.length
+          ? report.conflicts.length+' nota(s) com diferenças. Compara as duas versões; nenhuma foi substituída.'
+          : 'Não existem divergências nesta verificação. Usa Sincronizar para confirmar a atualização.';
+      } catch(err) {
+        reviewStatus.textContent='Verificação não concluída: '+db.userMessage(err)+'. Nenhuma nota foi alterada.';
+      } finally {
+        reviewBusy=false;
+        refresh.disabled=false;
       }
     }
     function updateMode(message) {
@@ -820,6 +871,9 @@
     }
     $('dropbox-btn').addEventListener('click', () => open(getActiveId()));
     $('dropbox-close').addEventListener('click', close);
+    reviewButton.addEventListener('click',openConflictReview);
+    $('dropbox-conflict-review-close').addEventListener('click',()=>reviewDialog.close());
+    $('dropbox-conflict-review-refresh').addEventListener('click',()=>void recheckConflictReview());
     $('note-share-close').addEventListener('click',()=>{shareDialog.close();shareNoteId=null;});
     $('note-share-dropbox').addEventListener('click',shareDropboxShortcut);
     $('note-share-whatsapp').addEventListener('click',shareWhatsapp);
@@ -888,6 +942,9 @@
       quickRequest++;
       if(quickDialog.open)quickDialog.close();
       if(shareDialog.open)shareDialog.close();
+      if(reviewDialog.open)reviewDialog.close();
+      renderConflicts([]);
+      reviewStatus.textContent='';
       shareNoteId=null;
     });
     root.addEventListener('notas:private-authorized', () => {
