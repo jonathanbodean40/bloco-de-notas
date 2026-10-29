@@ -6,7 +6,7 @@
   <title>Notas Exclusivas Pro</title>
   <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Notas Pro">
   <link rel="preload" href="app.js" as="script">
-  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="keep-aligner-tool.css"><link rel="stylesheet" href="dropbox-feedback.css"><link rel="stylesheet" href="notes-extras.css">
+  <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="keep-aligner-tool.css"><link rel="stylesheet" href="notes-extras.css">
   <style>[hidden]{display:none!important}body.private-locked>#private-app{display:none!important}</style>
 </head>
 <body class="private-locked">
@@ -46,9 +46,7 @@
   <footer id="app-footer" aria-label="Conta e sincronização">
     <button id="keep-aligner-tool-btn" type="button" aria-haspopup="dialog" aria-controls="keep-aligner-dialog" title="Abrir ferramenta KEEP ALIGNER">KEEP ALIGNER</button>
     <button id="account-btn">Conta</button>
-    <button id="dropbox-btn" type="button" title="Dropbox (ferramentas internas)" hidden>Dropbox</button>
     <button id="sync-icon-btn" aria-label="Sincronizar" title="Sincronizar">⟳</button>
-    <button id="dropbox-review-button" type="button" hidden aria-controls="dropbox-conflict-review-dialog" aria-haspopup="dialog">Resolver conflito Dropbox</button>
     <span id="save-status" role="status" aria-live="polite"></span>
   </footer>
   <dialog id="auth-dialog">
@@ -120,117 +118,6 @@
     <div class="dialog-actions"><button type="submit">Guardar caso</button></div>
   </form></dialog>
   <dialog id="trash-dialog" class="manager-dialog"><div class="dialog-heading"><h2>Notas excluídas</h2><button data-close="trash-dialog" aria-label="Fechar notas excluídas">✕</button></div><p>Restaurar recupera a última versão guardada.</p><div id="trash-list" class="records-list"></div></dialog>
-  <dialog id="dropbox-dialog" class="manager-dialog" aria-labelledby="dropbox-title">
-    <div class="dialog-heading"><h2 id="dropbox-title">Guardar nota no Dropbox</h2><button type="button" id="dropbox-close" aria-label="Fechar Dropbox">✕</button></div>
-    <p id="dropbox-selected-note">Escolha uma nota primeiro</p>
-    <p>Sem ativação, apenas as notas escolhidas são copiadas para o Dropbox. No modo principal, todas as notas guardadas são sincronizadas, mantendo cópia local e backup Supabase.</p>
-    <label>Chave pública da aplicação Dropbox<input id="dropbox-key" type="text" autocomplete="off" spellcheck="false" placeholder="App key Dropbox"></label>
-    <div class="dialog-actions"><button type="button" id="dropbox-connect">Ligar Dropbox</button><button type="button" id="dropbox-disconnect">Desligar Dropbox</button></div>
-    <small>Depois de autorizar, a ligação pode ser lembrada neste dispositivo em armazenamento encriptado do navegador. «Desligar Dropbox» limpa essa autorização local; também pode revogar o acesso nas definições da conta Dropbox.</small>
-    <label>Pasta do Dropbox<input id="dropbox-folder" type="text" placeholder="/Bloco de Notas Pro/Notas" value="/Bloco de Notas Pro/Notas"></label>
-    <div class="dialog-actions"><button type="button" id="dropbox-browse">Explorar pastas</button><button type="button" id="dropbox-create-folder">Criar pasta</button></div>
-    <div id="dropbox-folders" class="dropbox-folder-list"></div>
-    <div class="dialog-actions"><button type="button" id="dropbox-save">Guardar cópia técnica desta nota</button><button type="button" id="dropbox-recover">Comparar com cópia</button><button type="button" id="dropbox-copy-link">Copiar ligação direta</button></div>
-    <p id="dropbox-status" role="status" aria-live="polite">Não ligado ao Dropbox.</p>
-    <section id="dropbox-readable-export" class="dropbox-readable-export" aria-labelledby="dropbox-readable-title">
-      <h3 id="dropbox-readable-title">Exportar nota para abrir no Dropbox</h3>
-      <p>Exportação manual independente da sincronização. Escolhe a pasta acima e o formato da cópia.</p>
-      <label for="dropbox-readable-format">Formato da nota
-        <select id="dropbox-readable-format">
-          <option value="md">Markdown (.md) — texto e hiperligações</option>
-          <option value="txt">Texto (.txt) — editável num editor de texto compatível</option>
-          <option value="html">HTML (.html) — texto formatado e imagens</option>
-        </select>
-      </label>
-      <div class="dialog-actions">
-        <button type="button" id="dropbox-export-readable">Guardar nota legível nesta pasta do Dropbox</button>
-        <button type="button" id="dropbox-download-readable">Descarregar nota</button>
-      </div>
-      <p id="dropbox-readable-status" role="status" aria-live="polite"></p>
-      <small>Os ficheiros exportados são cópias para consulta. Não substituem a nota editável nem alteram o índice central de sincronização.</small>
-    </section>
-    <section class="dropbox-primary-settings" aria-labelledby="dropbox-primary-title">
-      <h3 id="dropbox-primary-title">Armazenamento principal e cópias de segurança</h3>
-      <p>Modo local-first: a escrita continua imediata no dispositivo; o Dropbox recebe as notas em segundo plano, com histórico de revisões. O Supabase permanece como cópia adicional.</p>
-      <p id="dropbox-primary-status" role="status" aria-live="polite">Modo principal ainda não ativado.</p>
-      <p id="dropbox-activation-feedback" class="dropbox-activation-feedback" role="status" aria-live="polite" data-state="info">Antes de ativar no POCO, verifica as divergências. Esta análise não altera notas.</p>
-      <div class="dialog-actions">
-        <button type="button" id="dropbox-inspect-conflicts">Verificar conflitos</button>
-        <button type="button" id="dropbox-enable-primary">Ativar Dropbox como principal</button>
-        <button type="button" id="dropbox-sync-all">Sincronizar com Dropbox agora</button>
-      </div>
-      <small>Antes da ativação, todas as notas devem estar sincronizadas. Se houver versões divergentes, a migração é bloqueada sem apagar conteúdo. Após a ativação, o botão «Guardar cópia» permite escolher outra pasta, mantendo a versão anterior recuperável.</small>
-    </section>
-    <small>As pastas são navegáveis diretamente nesta aplicação. Abrir ficheiros .keepnote.json com um toque a partir da aplicação Dropbox depende do sistema operativo e não é garantido.</small>
-  </dialog>
-  <dialog id="dropbox-conflict-review-dialog" class="dropbox-conflict-review-dialog" aria-labelledby="dropbox-conflict-review-title">
-    <div class="dialog-heading">
-      <h2 id="dropbox-conflict-review-title">Resolver conflitos de sincronização</h2>
-      <button id="dropbox-conflict-review-close" type="button" aria-label="Fechar comparação">✕</button>
-    </div>
-    <p>Há alterações diferentes em dois dispositivos. Nenhuma versão será substituída sem a tua autorização.</p>
-    <p id="dropbox-conflict-review-status" role="status" aria-live="polite"></p>
-    <div id="dropbox-conflicts" class="dropbox-conflict-list" aria-live="polite"></div>
-    <button id="dropbox-conflict-review-refresh" type="button">Verificar novamente (apenas leitura)</button>
-  </dialog>
-  <dialog id="note-share-dialog" class="note-share-dialog" aria-labelledby="note-share-title">
-    <div class="dialog-heading">
-      <h2 id="note-share-title">Partilhar nota</h2>
-      <button id="note-share-close" type="button" aria-label="Fechar partilha">✕</button>
-    </div>
-    <p id="note-share-selected" class="note-share-selected"></p>
-    <div class="note-share-destinations">
-      <button id="note-share-dropbox" type="button">Dropbox</button>
-      <button id="note-share-whatsapp" type="button">WhatsApp</button>
-      <button id="note-share-gmail" type="button">Gmail</button>
-    </div>
-    <p id="note-share-status" role="status" aria-live="polite"></p>
-    <small>As opções partilham a ligação privada para a nota original. A edição e a sincronização continuam no Bloco de Notas Pro; abrir a ligação exige uma sessão autorizada.</small>
-  </dialog>
-  <dialog id="quick-export-dialog" class="quick-export-dialog" aria-labelledby="quick-export-title">
-    <div class="dialog-heading">
-      <h2 id="quick-export-title">Exportar nota</h2>
-      <button id="quick-export-close" type="button" aria-label="Fechar exportação">✕</button>
-    </div>
-    <p id="quick-export-note" class="quick-export-note"></p>
-    <div class="quick-export-formats">
-      <label for="quick-export-format">Formato da cópia</label>
-      <select id="quick-export-format">
-        <option value="md">Nota com links (.md) — abrir e editar o original</option>
-        <option value="txt">Texto editável (.txt) — para editores de texto compatíveis</option>
-        <option value="html">Nota formatada (.html) — com imagens</option>
-      </select>
-    </div>
-    <section class="quick-export-folders" aria-labelledby="quick-export-dropbox-heading">
-      <h3 id="quick-export-dropbox-heading">Guardar no Dropbox</h3>
-      <p class="quick-export-hint">Escolhe uma pasta a partir da raiz do Dropbox. A ligação à conta é lembrada neste dispositivo.</p>
-      <div class="quick-export-location">
-        <button id="quick-export-up" type="button">← Voltar</button>
-        <strong id="quick-export-path">Dropbox /</strong>
-        <button id="quick-export-refresh" type="button">Atualizar</button>
-      </div>
-      <div id="quick-export-folder-list" class="quick-export-folder-list" role="group" aria-label="Pastas Dropbox"></div>
-      <div class="quick-export-location">
-        <input id="quick-export-new-folder" type="text" maxlength="150" autocomplete="off" placeholder="Nome de nova pasta" aria-label="Nome da nova pasta">
-        <button id="quick-export-mkdir" type="button">Criar pasta</button>
-      </div>
-      <div class="quick-export-actions">
-        <button id="quick-export-save" type="button">Guardar nesta pasta</button>
-        <button id="quick-export-connect" type="button" hidden>Autorizar Dropbox (apenas na primeira utilização)</button>
-      </div>
-    </section>
-    <section class="quick-export-share" aria-labelledby="quick-export-share-title">
-      <h3 id="quick-export-share-title">Enviar ou guardar</h3>
-      <div class="quick-export-actions">
-        <button id="quick-export-share-text" type="button">WhatsApp, email e outras aplicações</button>
-        <button id="quick-export-share-file" type="button">Enviar ficheiro</button>
-        <button id="quick-export-download" type="button">Guardar no dispositivo</button>
-      </div>
-      <button id="quick-export-open-original" type="button">Editar esta nota no Bloco de Notas Pro</button>
-    </section>
-    <p id="quick-export-status" role="status" aria-live="polite">A escolher o destino da nota.</p>
-    <small>Todos os formatos incluem uma ligação para editar a nota original no Bloco de Notas Pro. Uma cópia .txt pode ser editada por aplicações externas compatíveis, mas essas alterações não sincronizam automaticamente com a nota original.</small>
-  </dialog>
   <dialog id="link-dialog"><form id="link-form"><div class="dialog-heading"><h2>Adicionar ligação</h2><button id="cancel-link" type="button" aria-label="Cancelar ligação">✕</button></div><label>Endereço completo<input id="link-url" type="text" required placeholder="https://…"></label><label>Texto a mostrar (opcional)<input id="link-label" type="text" placeholder="Abrir página ou plano de tratamento"></label><p id="link-error" role="status"></p><div class="dialog-actions"><button type="submit">Adicionar ligação</button></div></form></dialog>
   <dialog id="keep-aligner-dialog" aria-labelledby="keep-aligner-title" aria-describedby="keep-aligner-intro">
     <div class="ka-heading"><div><span class="ka-eyebrow">FERRAMENTA DE TRABALHO</span><h2 id="keep-aligner-title">Gerador KEEP ALIGNER</h2></div><button id="keep-aligner-close" type="button" aria-label="Fechar ferramenta KEEP ALIGNER">✕</button></div>
@@ -245,11 +132,11 @@
     </form>
     <p id="ka-copy-status" class="ka-copy-status" role="status" aria-live="polite">Preencha a referência do caso e escolha um dos pedidos.</p>
     <section id="ka-result" hidden aria-labelledby="ka-result-title"><div class="ka-result-heading"><h3 id="ka-result-title">Pedido gerado</h3><span>Pronto para colar no agente</span></div><textarea id="ka-output" rows="10" readonly aria-label="Pedido KEEP ALIGNER gerado" spellcheck="false"></textarea></section>
-    <details class="ka-manual"><summary>Manual rápido e lista de conferência</summary><div class="ka-manual-content"><h3>Passo a passo</h3><ol><li>Deixe o MSI ligado, com Dropbox disponível, PowerPoint instalado e Remote Desktop Commander conectado.</li><li>Escolha um agente com acesso ao MSI. Configuração inicial sugerida no manual: GPT-6.1 Sol, esforço Médio, se disponível; alternativa Astra, Médio. O modelo não concede acesso ao PC.</li><li>Preencha a referência, acrescente o link/versão quando disponível e copie um dos dois pedidos. Não precisa de copiar a conversa antiga.</li><li>Cole o pedido no agente. Para vários casos, peça execução por ordem, sem misturar fichas e versões.</li><li>Confira a prévia. Só depois autorize expressamente a publicação daquele pacote/caso/versão em My Keep. Publicação não é aprovação clínica.</li><li>Se houver interrupção, peça para retomar o mesmo caso e versão pelo estado guardado, reutilizando as etapas válidas.</li></ol><h3>Antes de aceitar o material</h3><ul><li>Identificação e contagens corretas; nomes em maiúsculas e modelo padrão preservado.</li><li>Attachments centrados na coroa; X apenas em ausências confirmadas; IPR no contacto correto, com etapas e quantidades legíveis.</li><li>Botões, faces e ligações dos elásticos de acordo com o caso; não reutilizar dados clínicos do exemplo.</li><li>Relatório numa única caixa de texto, com as considerações clínicas importantes.</li><li>Na apresentação: capturas reais sem contactos oclusais visíveis, orientação/escala comparáveis, tabela completa e legível, preço aplicável + IVA.</li></ul><h3>Referência oficial e arquivo</h3><p>O agente deve consultar as duas páginas do modelo editável indicado no manual do MSI. O exemplo não é prescrição para outro paciente.</p><code class="ka-path">C:/Users/ferna/Dropbox/1_KEEP ALIGNER PORTUGAL/FLUXO DE TRABALHO KEEP ALIGNER/GERADOR KEEP ALIGNER/assets/guia-oficial.pptx</code><p>INFORME: guia definitiva e restantes materiais solicitados, incluindo o link 3D Keep da mesma versão quando disponível. ARQUIVOS DE APOIO: fontes técnicas, CSV, tabela, IIWGL e palavra-passe. Não substituir o link Keep pelo Hirsch.</p><p>O gerador ainda exige conferência visual e tem limites de idioma/mecânicas. O agente deve indicar pendências, nunca inventar dados ou desativar validações.</p></div></details>
+    <details class="ka-manual"><summary>Manual rápido e lista de conferência</summary><div class="ka-manual-content"><h3>Passo a passo</h3><ol><li>Deixe o MSI ligado, PowerPoint instalado e Remote Desktop Commander conectado.</li><li>Escolha um agente com acesso ao MSI. Configuração inicial sugerida no manual: GPT-6.1 Sol, esforço Médio, se disponível; alternativa Astra, Médio. O modelo não concede acesso ao PC.</li><li>Preencha a referência, acrescente o link/versão quando disponível e copie um dos dois pedidos. Não precisa de copiar a conversa antiga.</li><li>Cole o pedido no agente. Para vários casos, peça execução por ordem, sem misturar fichas e versões.</li><li>Confira a prévia. Só depois autorize expressamente a publicação daquele pacote/caso/versão em My Keep. Publicação não é aprovação clínica.</li><li>Se houver interrupção, peça para retomar o mesmo caso e versão pelo estado guardado, reutilizando as etapas válidas.</li></ol><h3>Antes de aceitar o material</h3><ul><li>Identificação e contagens corretas; nomes em maiúsculas e modelo padrão preservado.</li><li>Attachments centrados na coroa; X apenas em ausências confirmadas; IPR no contacto correto, com etapas e quantidades legíveis.</li><li>Botões, faces e ligações dos elásticos de acordo com o caso; não reutilizar dados clínicos do exemplo.</li><li>Relatório numa única caixa de texto, com as considerações clínicas importantes.</li><li>Na apresentação: capturas reais sem contactos oclusais visíveis, orientação/escala comparáveis, tabela completa e legível, preço aplicável + IVA.</li></ul><h3>Referência oficial e arquivo</h3><p>O agente deve consultar as duas páginas do modelo editável indicado no manual do MSI. O exemplo não é prescrição para outro paciente.</p><code class="ka-path">Modelo oficial guia-oficial.pptx no MSI</code><p>INFORME: guia definitiva e restantes materiais solicitados, incluindo o link 3D Keep da mesma versão quando disponível. ARQUIVOS DE APOIO: fontes técnicas, CSV, tabela, IIWGL e palavra-passe. Não substituir o link Keep pelo Hirsch.</p><p>O gerador ainda exige conferência visual e tem limites de idioma/mecânicas. O agente deve indicar pendências, nunca inventar dados ou desativar validações.</p></div></details>
     <p class="ka-privacy">Os campos desta ferramenta não são guardados nas notas nem enviados para um servidor. Permanecem apenas nesta página até a recarregar. Copiar coloca o pedido na área de transferência.</p>
   </dialog>
   </div>
-  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="dropbox-storage.js"></script><script src="dropbox-token-vault.js"></script><script src="dropbox-oauth.js"></script><script src="dropbox-primary.js"></script><script src="note-export.js"></script><script src="dropbox-ui.js"></script><script src="private-access.js"></script><script src="keep-aligner-tool.js"></script>
+  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="private-access.js"></script><script src="keep-aligner-tool.js"></script>
 </body></html>
 
 

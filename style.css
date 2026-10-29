@@ -167,22 +167,3 @@ body.note-options-open #custom-context-menu{position:fixed;left:auto!important;r
 .text-box>.textbox-body>.textbox-canvas>.textbox-editor{padding-right:28px}
 .text-box:not(.pinned)>.textbox-body,.text-box:not(.pinned)>.textbox-body>.textbox-canvas{cursor:move}
 @media(pointer:coarse){.object-lock{width:36px;height:36px}.text-box>.textbox-body>.textbox-canvas>.textbox-editor{padding-right:36px}}
-
-/* Dropbox experimental: manter o seletor de pastas compacto em desktop e mobile. */
-.dropbox-folder-list{display:flex;flex-wrap:wrap;gap:6px;max-height:165px;overflow-y:auto;margin:8px 0}
-.dropbox-folder-list button{font:inherit;padding:7px 10px;border:1px solid #b6bec7;border-radius:7px;background:#f4f6f8;color:#1d2730;cursor:pointer}
-#dropbox-dialog label{display:block;margin:12px 0 8px}
-#dropbox-dialog label input{display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:9px 11px}
-#dropbox-dialog .dialog-actions{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
-#dropbox-dialog small{display:block;margin-top:12px}
-.dropbox-primary-settings{margin-top:18px;padding:14px;border:1px solid #d9e3e9;border-radius:10px;background:#f7fafc}
-.dropbox-primary-settings h3{font-size:16px;margin:0 0 6px}
-.dropbox-primary-settings p{font-size:13px;line-height:1.5}
-.dropbox-conflict-list>div{background:#fff8e7;border:1px solid #dec58a;border-radius:9px;padding:10px;margin:8px 0}
-.dropbox-conflict-list button{width:100%;max-width:100%;white-space:normal}
-.dropbox-conflict-comparison{display:grid;gap:10px;margin:12px 0}
-.dropbox-conflict-comparison[hidden]{display:none}
-.dropbox-conflict-comparison section{background:#fff;border:1px solid #d6dfe8;border-radius:8px;padding:10px;min-width:0}
-.dropbox-conflict-comparison pre{font:12px/1.5 system-ui,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;margin:6px 0}
-.dropbox-conflict-comparison p{font-size:12px;overflow-wrap:anywhere}
-.window-bar [data-window="dropbox"]{font-size:22px}

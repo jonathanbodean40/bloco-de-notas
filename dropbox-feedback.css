@@ -1,7 +1,0 @@
-/* Isolated visual feedback for Dropbox activation; leaves the main Keep Aligner stylesheet untouched. */
-.dropbox-activation-feedback{font-size:13px;line-height:1.5;padding:10px 12px;margin:10px 0 8px;border:1px solid #c9d7e4;border-radius:8px;background:#f6f8fb;scroll-margin-block:18px;overflow-wrap:anywhere}
-.dropbox-activation-feedback[data-state="warning"]{background:#fff9e9;border-color:#d9c68d}
-.dropbox-activation-feedback[data-state="error"]{background:#fff2f0;border-color:#e3aaa4}
-.dropbox-activation-feedback[data-state="success"]{background:#eef8f3;border-color:#9acbb0}
-.dropbox-activation-feedback[data-state="progress"]{background:#eff5fd}
-#dropbox-enable-primary[disabled],#dropbox-inspect-conflicts[disabled]{opacity:.65;cursor:wait}

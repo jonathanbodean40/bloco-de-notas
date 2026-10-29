@@ -1,4 +1,4 @@
-/* Read-only, manual exports; never modify the canonical note in Dropbox. */
+/* Read-only format helpers for synthetic export tests; not loaded by the application. */
 (function(root){
 'use strict';
 const tick=String.fromCharCode(96);

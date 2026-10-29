@@ -64,9 +64,10 @@ async function run() {
   await check('Autenticação, configuração e estilos principais preservados face à versão publicada', () => {
     // The note editor is intentionally modified to restore export and reordering.
     // Authentication/configuration and approved main styling must not regress.
-    for (const name of ['private-access.js','config.js','style.css']) {
+    for (const name of ['private-access.js','config.js']) {
       assert.equal(execFileSync('git',['diff','--exit-code','HEAD','--',name],{cwd:root,encoding:'utf8'}),'');
     }
+    assert.equal(fs.readFileSync(path.join(root,'style.css'),'utf8'),execFileSync('git',['show','b984514:style.css'],{cwd:root,encoding:'utf8'}));
     const tool = fs.readFileSync(path.join(root,'keep-aligner-tool.js'),'utf8');
     for (const forbidden of [/localStorage\./,/sessionStorage\./,/\bfetch\(/,/supabase/]) assert(!forbidden.test(tool));
   });
@@ -184,11 +185,11 @@ async function run() {
     },cacheVersion);
     const expected=assetNames.map(name=>new URL(name,base+'/').pathname);
     assert.deepEqual(cached.slice().sort(),expected.slice().sort(),'A cache corresponde exatamente ao manifesto publicado');
-    for(const required of ['/keep-aligner-tool.js','/keep-aligner-tool.css','/dropbox-feedback.css','/index.html'])
+    for(const required of ['/keep-aligner-tool.js','/keep-aligner-tool.css','/index.html'])
       assert(cached.includes(required),'Recurso offline em falta: '+required);
     assert(!cached.some(url=>/\/(?:auth|rest|notes-api)(?:\/|$)/.test(url)),
       'A cache não deve guardar respostas de autenticação ou dados de conta');
-    for(const name of ['keep-aligner-tool.js','keep-aligner-tool.css','dropbox-feedback.css','index.html']) {
+    for(const name of ['keep-aligner-tool.js','keep-aligner-tool.css','index.html']) {
       const bytes=await op.evaluate(async({name,version})=>{
         const cached=await caches.open(version);
         const response=await cached.match('/'+name);
