@@ -220,6 +220,51 @@
     const size=action==='save'||action==='share'?32:24;
     return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" style="width:${size}px;height:${size}px" aria-hidden="true" focusable="false">${paths[action]}</svg>`;
   }
+  // Export is always user initiated; no Dropbox token, API or storage is used.
+  function exportText(w) {
+    captureTextBoxes(w);
+    const parts=[w.title||'Sem título'];
+    if(w.kind==='onyx')for(const row of w.onyxRows||[])parts.push(plainText(row.html||''));
+    else {
+      parts.push(w.editor.innerText||plainText(w.editor.innerHTML));
+      for(const obj of w.objects||[])if(obj.type==='textbox'&&obj.html)parts.push(plainText(obj.html));
+    }
+    return parts.filter(Boolean).join('\n\n').trim();
+  }
+  async function copyExportText(w){
+    const content=exportText(w);
+    if(!content){status.textContent='Nota vazia.';return;}
+    try{await navigator.clipboard.writeText(content);status.textContent='Texto da nota copiado.';}
+    catch{status.textContent='Não foi possível copiar. Verifique a permissão da área de transferência.';}
+  }
+  function exportFile(w){
+    const content=exportText(w), title=(w.title||'Nota').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').slice(0,60)||'Nota';
+    return new File([content],title+'.txt',{type:'text/plain;charset=utf-8'});
+  }
+  async function exportDropbox(w){
+    const file=exportFile(w);
+    if(navigator.canShare?.({files:[file]})){
+      try{await navigator.share({files:[file],title:w.title||'Nota'});return;}catch(e){if(e.name==='AbortError')return;}
+    }
+    // Desktop fallback: save an explicit local copy, then offer Dropbox upload.
+    const blob=URL.createObjectURL(file),a=document.createElement('a');a.href=blob;a.download=file.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(blob),30000);
+    status.textContent='Ficheiro exportado. Pode enviá-lo para o Dropbox manualmente.';
+    if(confirm('Abrir o Dropbox para carregar a cópia exportada?'))window.open('https://www.dropbox.com/home','_blank','noopener,noreferrer');
+  }
+  function openExportMenu(w) {
+    const old=document.querySelector('#note-export-dialog');if(old)old.remove();
+    const dialog=document.createElement('dialog');dialog.id='note-export-dialog';dialog.className='manager-dialog';
+    const heading=document.createElement('h2');heading.textContent='Exportar nota';dialog.append(heading);
+    const caption=document.createElement('p');caption.textContent='Apenas a nota selecionada. Nunca existe sincronização com Dropbox.';dialog.append(caption);
+    const actions=document.createElement('div');actions.className='dialog-actions';
+    function action(label,handler){const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',()=>{dialog.close();Promise.resolve(handler()).catch(()=>{status.textContent='Não foi possível concluir a exportação.';});});actions.append(b);}
+    action('Dropbox',()=>exportDropbox(w));
+    action('WhatsApp',()=>{const message=exportText(w).slice(0,6000);window.open('https://wa.me/?text='+encodeURIComponent(message),'_blank','noopener,noreferrer');});
+    action('Gmail',()=>{const url='https://mail.google.com/mail/?view=cm&fs=1&su='+encodeURIComponent(w.title||'Nota')+'&body='+encodeURIComponent(exportText(w).slice(0,6000));window.open(url,'_blank','noopener,noreferrer');});
+    action('Copiar texto',()=>copyExportText(w));
+    action('Cancelar',()=>{});
+    dialog.append(actions);document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();
+  }
   function createWindow(note = null, focus = true) {
     if(note && windows.has(note.id)) { const w=windows.get(note.id);activate(w);w.el.scrollIntoView({block:'nearest',inline:'nearest'});closeSidebar();return w; }
     const data = decode(note?.content || '');
@@ -227,7 +272,7 @@
     const initial = data.rect || {x:14+(n%3)*36,y:14+(n%3)*32,w:width,h:height};
     const rect={w:clamp(initial.w,280,Math.max(280,workspace.clientWidth-16)),h:clamp(initial.h,240,Math.max(240,workspace.clientHeight-16)),x:0,y:0};
     rect.x=clamp(initial.x,0,workspace.clientWidth-rect.w);rect.y=clamp(initial.y,0,workspace.clientHeight-40);
-    const el=document.createElement('section');el.className='note-window';el.innerHTML=`<div class="window-bar"><button data-window="save" aria-label="Guardar nota" title="Guardar nota">${noteActionIcon('save')}</button><button data-window="menu" aria-label="Opções de formatação" title="Opções de formatação" aria-expanded="false">${noteActionIcon('menu')}</button><button data-window="close" aria-label="Fechar nota" title="Fechar nota sem eliminar">${noteActionIcon('close')}</button></div><div class="note-scroll"><div class="note-paper"><div class="note-editor" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui…" spellcheck="true"></div></div></div><div class="window-footer"><span>${note?'Guardado neste dispositivo':'Pronto para escrever'}</span><span>Gravação manual</span></div>`;
+    const el=document.createElement('section');el.className='note-window';el.innerHTML=`<div class="window-bar"><button data-window="export" aria-label="Exportar nota" title="Exportar para Dropbox, WhatsApp, Gmail ou copiar texto">${noteActionIcon('export')}</button><button data-window="save" aria-label="Guardar nota" title="Guardar nota">${noteActionIcon('save')}</button><button data-window="menu" aria-label="Opções de formatação" title="Opções de formatação" aria-expanded="false">${noteActionIcon('menu')}</button><button data-window="close" aria-label="Fechar nota" title="Fechar nota sem eliminar">${noteActionIcon('close')}</button></div><div class="note-scroll"><div class="note-paper"><div class="note-editor" contenteditable="true" role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva a sua nota aqui…" spellcheck="true"></div></div></div><div class="window-footer"><span>${note?'Guardado neste dispositivo':'Pronto para escrever'}</span><span>Gravação manual</span></div>`;
     const w={id:note?.id||makeId(),title:note?.title === 'Sem título' ? '' : note?.title || '',el,editor:el.querySelector('.note-editor'),paper:el.querySelector('.note-paper'),footer:el.querySelector('.window-footer span'),...data,rect,selected:null,history:[],historyIndex:0};
     if(!note?.content&&route.searchParams.get('kind')==='onyx'){w.kind='onyx';w.onyxRows=decodeOnyx([{}, {}, {}, {}]);}w.editor.innerHTML=data.html;windows.set(w.id,w);workspace.append(el);geometry(w);linkify(w,false);display(w);w.history=[snapshot(w)];w.savedSnapshot=snapshot(w);w.savedAt=note?.updatedAt;w.savedNote=note?{...note}:null;w.dirty=false;
     const destination=validLocation({noteId:route.searchParams.get('parent'),folderId:route.searchParams.get('folder')});if(destination){w.location=destination;commit(w);}
@@ -235,7 +280,7 @@
     w.zoom=1;
     el.querySelectorAll('[data-window]').forEach(button=>button.addEventListener('click',()=>{
       activate(w);const action=button.dataset.window;
-      if(action==='close')closeNote(w);if(action==='save')saveNote(w);
+      if(action==='export')openExportMenu(w);if(action==='close')closeNote(w);if(action==='save')saveNote(w);
       if(action==='menu'){if(!menu.hidden){closeMenu();return;}const r=button.getBoundingClientRect();openMenu(w,r.left,r.bottom+3);}
     }));
     w.paper.addEventListener('contextmenu',e=>{if(mobileFormatMenu()){closeMenu();return;}e.preventDefault();openMenu(w,e.clientX,e.clientY);});
