@@ -1,0 +1,53 @@
+{
+  "name": "bloco-de-notas-pro",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bloco de Notas Pro — clientes locais independentes do ChatGPT e Dropbox",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "stage:web": "node scripts/stage-web.mjs",
+    "desktop": "npm run stage:web && electron .",
+    "build:windows": "npm run stage:web && electron-builder --win nsis",
+    "android:sync": "npm run stage:web && cap sync android",
+    "android:open": "cap open android",
+    "test:independence": "node scripts/check-independence.mjs"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.4.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.0",
+    "@capacitor/android": "^7.4.0",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "pt.keepaligner.notaspro",
+    "productName": "Bloco de Notas Pro",
+    "directories": {
+      "output": "dist-installers"
+    },
+    "files": [
+      "desktop/**",
+      "www/**",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
