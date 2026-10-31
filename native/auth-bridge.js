@@ -1,9 +1,9 @@
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import { Share } from '@capacitor/share';
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { registerPlugin } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
 const isAndroid = Boolean(window.Capacitor?.isNativePlatform?.());
+const NativeShare = registerPlugin('KeepShare');
 let pendingAuthUrl = null;
 let lastDeliveredUrl = null;
 function handleAppUrl(url) {
@@ -27,18 +27,19 @@ window.NOTAS_NATIVE = Object.freeze({
     if(isAndroid)await Clipboard.write({string:String(text)});
     else await navigator.clipboard.writeText(String(text));
   },
-  shareFile: async ({title,filename,text}) => {
+  shareFile: async ({target,title,filename,content}) => {
     if(!isAndroid)return false;
-    const safeName=String(filename||'Nota.txt').replace(/[^A-Za-z0-9_.-]/g,'-').slice(0,110);
-    const path='exports/'+Date.now()+'-'+safeName;
-    await Filesystem.writeFile({path,data:String(text),directory:Directory.Cache,encoding:Encoding.UTF8,recursive:true});
-    const {uri}=await Filesystem.getUri({path,directory:Directory.Cache});
-    await Share.share({title:String(title||'Nota'),files:[uri],dialogTitle:'Exportar a nota'});
+    await NativeShare.shareFile({
+      target:String(target||'dropbox'),title:String(title||'Nota'),
+      filename:String(filename||'Nota.html'),content:String(content||'')
+    });
     return true;
   },
-  shareText: async ({title,text}) => {
+  shareText: async ({target,title,text}) => {
     if(!isAndroid)return false;
-    await Share.share({title:String(title||'Nota'),text:String(text),dialogTitle:'Partilhar a nota'});
+    await NativeShare.shareText({
+      target:String(target||''),title:String(title||'Nota'),text:String(text||'')
+    });
     return true;
   }
 });
