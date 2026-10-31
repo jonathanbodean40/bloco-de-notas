@@ -366,7 +366,6 @@
       observeSession(data.session);await validate({fresh:true});
     }).catch(()=>renderState('unauthenticated','Falhou a conclusão do login Google. Tente novamente.'));
   });
-  window.dispatchEvent(new Event('notas:native-auth-ready'));
   $('#private-retry-btn').addEventListener('click', () => { if (appFailed || !cloud) location.reload(); else void validate(); });
   $('#private-logout-btn').addEventListener('click', () => void signOut());
   $('#private-manage-btn').addEventListener('click', manageDevices);
@@ -383,6 +382,7 @@
   if (configured && window.supabase) {
     try { cloud = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey,{auth:{flowType:'pkce',detectSessionInUrl:!nativePlatform}}); }
     catch { lock('configuration'); return; }
+    window.dispatchEvent(new Event('notas:native-auth-ready'));
     cloud.auth.onAuthStateChange((_event, session) => {
       const changed = observeSession(session);
       // SIGNED_OUT also invalidates a pending initial getSession(), before an
