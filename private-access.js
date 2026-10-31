@@ -145,6 +145,9 @@
     return appLoading;
   }
   async function validate({fresh = false} = {}) {
+    // Keep an already authorized editor available during temporary network outages.
+    // Never authorize a fresh offline session or bypass token expiry.
+    if (navigator.onLine === false && authorized()) return true;
     if (!cloud) { lock('configuration'); return false; }
     if (checkFlight) { if (fresh || checkEpoch !== epoch) checkAgain = true; return checkFlight; }
     checkFlight = (async () => {
@@ -370,7 +373,7 @@
   $('#private-devices-close').addEventListener('click', () => devicesDialog.close());
   $('#private-devices-refresh').addEventListener('click', () => void listDevices());
   addEventListener('online', () => void validate());
-  addEventListener('offline', () => { epoch++; lock('unavailable'); });
+  addEventListener('offline', () => { if(!authorized()){ epoch++; lock('unavailable'); } });
   addEventListener('focus', () => { if (currentSession) void validate(); });
   addEventListener('pageshow', event => { if (event.persisted) { epoch++; lock('checking'); void validate(); } });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && currentSession) void validate(); });
