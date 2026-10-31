@@ -15,10 +15,18 @@ function resolveAsset(url) {
   return target;
 }
 let mainWindow;
+let pendingAuthUrl = null;
 function authCallback(url){
   if(typeof url!=='string'||!url.startsWith('notaspro://auth/callback?'))return;
+  pendingAuthUrl = url;
+  deliverAuthUrl();
+}
+function deliverAuthUrl(){
+  if(!pendingAuthUrl||!mainWindow||mainWindow.isDestroyed()||mainWindow.webContents.isLoading())return;
+  const url=pendingAuthUrl;
   const js='window.dispatchEvent(new CustomEvent("notas:auth-url",{detail:{url:'+JSON.stringify(url)+'}}));';
-  if(mainWindow&&!mainWindow.isDestroyed()){mainWindow.webContents.executeJavaScript(js).catch(()=>{});mainWindow.focus();}
+  mainWindow.webContents.executeJavaScript(js).then(()=>{if(pendingAuthUrl===url)pendingAuthUrl=null;}).catch(()=>{});
+  mainWindow.focus();
 }
 if(process.defaultApp){/* Development mode needs its executable registered separately. */}
 else app.setAsDefaultProtocolClient('notaspro');
@@ -50,9 +58,12 @@ app.whenReady().then(() => {
     win.webContents.on('will-navigate', (event,url) => {
       if (!url.startsWith('notas://app/')) {event.preventDefault();if(url.startsWith('https://')) shell.openExternal(url);}
     });
+    win.webContents.once('did-finish-load',()=>deliverAuthUrl());
     win.loadURL('notas://app/index.html');
   };
   open();
+  const initialUrl=process.argv.find(arg=>arg.startsWith('notaspro://auth/callback?'));
+  if(initialUrl)authCallback(initialUrl);
   app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)open();});
 });
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});
