@@ -249,7 +249,7 @@
   async function exportDropbox(w){
     const file=exportFile(w);
     if(window.NOTAS_NATIVE?.shareFile && await window.NOTAS_NATIVE.shareFile({target:'dropbox',title:w.title||'Nota',filename:file.name,content:await file.text()}))return;
-    if(navigator.canShare?.({files:[file]})){
+    if(location.protocol !== 'notas:' && navigator.canShare?.({files:[file]})){
       try{await navigator.share({files:[file],title:w.title||'Nota'});return;}catch(e){if(e.name==='AbortError')return;}
     }
     // Desktop fallback: save an explicit local copy, then offer Dropbox upload.
