@@ -5,8 +5,11 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Clipboard } from '@capacitor/clipboard';
 const isAndroid = Boolean(window.Capacitor?.isNativePlatform?.());
 let pendingAuthUrl = null;
+let lastDeliveredUrl = null;
 function handleAppUrl(url) {
   if(typeof url!=='string'||!url.startsWith('notaspro://auth/callback?'))return;
+  if(url===lastDeliveredUrl)return;
+  lastDeliveredUrl=url;
   pendingAuthUrl = url;
   window.dispatchEvent(new CustomEvent('notas:auth-url',{detail:{url}}));
   if(isAndroid)Browser.close().catch(()=>{});
