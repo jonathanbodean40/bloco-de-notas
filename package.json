@@ -54,6 +54,14 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
-    }
+    },
+    "protocols": [
+      {
+        "name": "Bloco de Notas Pro - Autenticacao",
+        "schemes": [
+          "notaspro"
+        ]
+      }
+    ]
   }
 }
