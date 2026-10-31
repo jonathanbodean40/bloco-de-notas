@@ -285,7 +285,8 @@
     get reloading() { return reloading; },
     validate,
     signOut,
-    manageDevices
+    manageDevices,
+    linkGoogle:beginGoogleLink
   });
   window.addEventListener('notas:private-ready', () => { appReady = true; });
   form.addEventListener('submit', async event => {
@@ -322,6 +323,26 @@
       renderState(reason,'Não foi possível iniciar o login Google. Verifique a configuração Google no Supabase e a ligação.');
     }finally{authBusy=false;$('#private-google-btn').disabled=false;}
   }
+  async function beginGoogleLink() {
+    if(!cloud||authBusy||!authorized()||!currentSession?.user?.id)return;
+    authBusy=true;
+    try {
+      sessionStorage.setItem('notas:google-link-owner',currentSession.user.id);
+      const {data,error}=await cloud.auth.linkIdentity({
+        provider:'google',
+        options:{redirectTo:nativePlatform?oauthCallback:location.origin+location.pathname,skipBrowserRedirect:nativePlatform}
+      });
+      if(error)throw error;
+      if(nativePlatform){
+        if(!data?.url)throw new Error('Missing Google link URL');
+        await window.NOTAS_NATIVE?.openExternal?.(data.url);
+      }
+    } catch {
+      sessionStorage.removeItem('notas:google-link-owner');
+      const message=$('#auth-message');
+      if(message)message.textContent='Não foi possível associar o Google. É necessário ativar o fornecedor e a associação de identidades no Supabase.';
+    } finally{authBusy=false;}
+  }
   $('#private-google-btn').addEventListener('click',()=>void beginGoogleLogin());
   window.dispatchEvent(new Event('notas:native-auth-ready'));
   window.addEventListener('notas:auth-url',event=>{
@@ -331,7 +352,16 @@
     const code=callback.searchParams.get('code');
     if(!code){renderState('unauthenticated','O Google não devolveu um código de autorização válido.');return;}
     void cloud.auth.exchangeCodeForSession(code).then(async ({data,error})=>{
-      if(error)throw error;observeSession(data.session);await validate({fresh:true});
+      if(error)throw error;
+      const expected=sessionStorage.getItem('notas:google-link-owner');
+      sessionStorage.removeItem('notas:google-link-owner');
+      if(expected && data?.session?.user?.id!==expected){
+        await cloud.auth.signOut({scope:'local'});
+        observeSession(null);
+        lock('not_owner');
+        throw new Error('Google identity returned a different account');
+      }
+      observeSession(data.session);await validate({fresh:true});
     }).catch(()=>renderState('unauthenticated','Falhou a conclusão do login Google. Tente novamente.'));
   });
   $('#private-retry-btn').addEventListener('click', () => { if (appFailed || !cloud) location.reload(); else void validate(); });
