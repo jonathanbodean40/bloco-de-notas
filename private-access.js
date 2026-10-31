@@ -323,6 +323,7 @@
     }finally{authBusy=false;$('#private-google-btn').disabled=false;}
   }
   $('#private-google-btn').addEventListener('click',()=>void beginGoogleLogin());
+  window.dispatchEvent(new Event('notas:native-auth-ready'));
   window.addEventListener('notas:auth-url',event=>{
     if(!cloud||typeof event.detail?.url!=='string')return;
     let callback;try{callback=new URL(event.detail.url);}catch{return;}
