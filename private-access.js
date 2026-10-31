@@ -111,6 +111,7 @@
     $('#private-manage-btn').hidden = nextReason !== 'device_limit';
     $('#private-logout-btn').hidden = !currentSession;
     $('#private-login-btn').disabled = authBusy;
+    $('#private-google-btn').disabled = authBusy;
     $('#private-logout-btn').disabled = authBusy;
   }
   async function rpc(name, params) {
@@ -302,6 +303,36 @@
     } catch { renderState('unauthenticated', 'Não foi possível iniciar sessão. Verifique a ligação à Internet.'); }
     finally { authBusy = false; $('#private-login-btn').disabled = false; $('#private-logout-btn').disabled = false; }
   });
+  const nativePlatform = Boolean(window.Capacitor?.isNativePlatform?.()) || location.protocol === 'notas:';
+  const oauthCallback = 'notaspro://auth/callback';
+  async function beginGoogleLogin(){
+    if(!cloud||authBusy)return;
+    authBusy=true;renderState(reason,'A abrir a autenticação Google…');
+    try{
+      const {data,error}=await cloud.auth.signInWithOAuth({
+        provider:'google',
+        options:{redirectTo:nativePlatform?oauthCallback:location.origin+location.pathname,skipBrowserRedirect:nativePlatform}
+      });
+      if(error)throw error;
+      if(nativePlatform){
+        if(!data?.url)throw new Error('Google login URL missing');
+        await window.NOTAS_NATIVE?.openExternal?.(data.url);
+      }
+    }catch{
+      renderState(reason,'Não foi possível iniciar o login Google. Verifique a configuração Google no Supabase e a ligação.');
+    }finally{authBusy=false;$('#private-google-btn').disabled=false;}
+  }
+  $('#private-google-btn').addEventListener('click',()=>void beginGoogleLogin());
+  window.addEventListener('notas:auth-url',event=>{
+    if(!cloud||typeof event.detail?.url!=='string')return;
+    let callback;try{callback=new URL(event.detail.url);}catch{return;}
+    if(callback.protocol!=='notaspro:'||callback.hostname!=='auth'||callback.pathname!=='/callback')return;
+    const code=callback.searchParams.get('code');
+    if(!code){renderState('unauthenticated','O Google não devolveu um código de autorização válido.');return;}
+    void cloud.auth.exchangeCodeForSession(code).then(async ({data,error})=>{
+      if(error)throw error;observeSession(data.session);await validate({fresh:true});
+    }).catch(()=>renderState('unauthenticated','Falhou a conclusão do login Google. Tente novamente.'));
+  });
   $('#private-retry-btn').addEventListener('click', () => { if (appFailed || !cloud) location.reload(); else void validate(); });
   $('#private-logout-btn').addEventListener('click', () => void signOut());
   $('#private-manage-btn').addEventListener('click', manageDevices);
@@ -316,7 +347,7 @@
   // Cache only the application shell; authorization always requires the server.
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').then(reg => reg.update()).catch(() => {});
   if (configured && window.supabase) {
-    try { cloud = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey); }
+    try { cloud = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey,{auth:{flowType:'pkce',detectSessionInUrl:!nativePlatform}}); }
     catch { lock('configuration'); return; }
     cloud.auth.onAuthStateChange((_event, session) => {
       const changed = observeSession(session);
