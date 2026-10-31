@@ -7,7 +7,7 @@
   "scripts": {
     "stage:web": "node scripts/build-native-auth.mjs && node scripts/stage-web.mjs",
     "desktop": "npm run stage:web && electron .",
-    "build:windows": "npm run stage:web && electron-builder --win nsis",
+    "build:windows": "npm run stage:web && electron-builder --win nsis --publish never",
     "android:sync": "npm run stage:web && cap sync android",
     "android:open": "cap open android",
     "test:independence": "node scripts/check-independence.mjs"
