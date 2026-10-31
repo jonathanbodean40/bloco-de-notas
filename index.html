@@ -21,7 +21,7 @@
         <label for="private-email">E-mail</label><input id="private-email" name="email" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" required>
         <label for="private-password">Palavra-passe</label><input id="private-password" name="password" type="password" autocomplete="current-password" required>
         <label for="private-device-name">Nome deste dispositivo</label><input id="private-device-name" name="device_name" type="text" maxlength="60" autocomplete="off" placeholder="Ex.: PC MSI">
-        <button id="private-login-btn" class="private-primary" type="submit">Entrar</button>
+        <button id="private-google-btn" type="button" class="private-primary">Entrar com Google</button><button id="private-login-btn" class="private-primary" type="submit">Entrar</button>
       </form>
       <div id="private-access-actions" class="private-actions">
         <button id="private-retry-btn" type="button" hidden>Tentar novamente</button>
@@ -136,7 +136,7 @@
     <p class="ka-privacy">Os campos desta ferramenta não são guardados nas notas nem enviados para um servidor. Permanecem apenas nesta página até a recarregar. Copiar coloca o pedido na área de transferência.</p>
   </dialog>
   </div>
-  <script src="vendor/supabase-js-v2.js"></script><script src="config.js"></script><script src="private-access.js"></script><script src="keep-aligner-tool.js"></script>
+  <script src="vendor/supabase-js-v2.js"></script><script src="native-auth.js"></script><script src="config.js"></script><script src="private-access.js"></script><script src="keep-aligner-tool.js"></script>
 </body></html>
 
 
