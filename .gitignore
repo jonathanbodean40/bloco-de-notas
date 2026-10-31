@@ -1,0 +1,10 @@
+node_modules/
+www/
+android/
+dist-installers/
+dist/
+*.keystore
+*.jks
+.env
+.env.*
+!.env.example
