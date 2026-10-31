@@ -347,7 +347,6 @@
     } finally{authBusy=false;}
   }
   $('#private-google-btn').addEventListener('click',()=>void beginGoogleLogin());
-  window.dispatchEvent(new Event('notas:native-auth-ready'));
   window.addEventListener('notas:auth-url',event=>{
     if(!cloud||typeof event.detail?.url!=='string')return;
     let callback;try{callback=new URL(event.detail.url);}catch{return;}
@@ -367,6 +366,7 @@
       observeSession(data.session);await validate({fresh:true});
     }).catch(()=>renderState('unauthenticated','Falhou a conclusão do login Google. Tente novamente.'));
   });
+  window.dispatchEvent(new Event('notas:native-auth-ready'));
   $('#private-retry-btn').addEventListener('click', () => { if (appFailed || !cloud) location.reload(); else void validate(); });
   $('#private-logout-btn').addEventListener('click', () => void signOut());
   $('#private-manage-btn').addEventListener('click', manageDevices);
