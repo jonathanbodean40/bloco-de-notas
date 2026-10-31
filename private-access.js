@@ -14,6 +14,8 @@
   const DEVICE_NAME_KEY = 'notas-pro:private-device-name';
   const MAX_DEVICES = 3;
   const RPC_TIMEOUT = 15000;
+  const OFFLINE_ACCESS_KEY = 'notas-pro:offline-access-v1';
+  const OFFLINE_ACCESS_MAX_AGE = 6 * 60 * 60 * 1000;
   const configured = /^https:\/\/.+\.supabase\.co$/.test(config.supabaseUrl || '') && /^(sb_publishable_|eyJ)/.test(config.supabasePublishableKey || '');
   let cloud = null;
   let currentSession = null;
@@ -59,6 +61,23 @@
   function authorized() {
     return !!approvedSession && approvedIdentity === currentIdentity;
   }
+  function clearOfflineGrant() { try { localStorage.removeItem(OFFLINE_ACCESS_KEY); } catch {} }
+  function approvedOffline(session) {
+    if(navigator.onLine!==false)return false;
+    const claims=tokenClaims(session);
+    if(!session?.user?.id || !claims.session_id || !Number.isFinite(Number(claims.exp)))return false;
+    if(Number(claims.exp)*1000 <= Date.now())return false;
+    let grant;try{grant=JSON.parse(localStorage.getItem(OFFLINE_ACCESS_KEY)||'null');}catch{return false;}
+    return !!grant && grant.userId===session.user.id && grant.sessionId===claims.session_id &&
+      Number.isFinite(grant.checkedAt) && Date.now()>=grant.checkedAt &&
+      Date.now()-grant.checkedAt<=OFFLINE_ACCESS_MAX_AGE;
+  }
+  function rememberOnlineApproval(session) {
+    const sessionId=tokenClaims(session).session_id;
+    if(!sessionId)return;
+    try{localStorage.setItem(OFFLINE_ACCESS_KEY,JSON.stringify({userId:session.user.id,sessionId,checkedAt:Date.now()}));}catch{}
+  }
+
   function lock(nextReason = 'checking') {
     const wasAuthorized = !!approvedSession;
     approvedSession = null;
@@ -165,13 +184,17 @@
         const session = currentSession;
         const requestedIdentity = currentIdentity;
         if (!session || !requestedIdentity) { lock('unauthenticated'); return false; }
-        const result = await rpc('personal_app_access', {p_device_name: deviceName()});
+        const offlineApproval=approvedOffline(session);
+        const result=offlineApproval
+          ? {allowed:true,reason:'authorized',max_devices:MAX_DEVICES,active_devices:1}
+          : await rpc('personal_app_access', {p_device_name: deviceName()});
         if (requestEpoch !== epoch || requestedIdentity !== currentIdentity) return false;
         if (result?.allowed !== true || result.reason !== 'authorized' || result.max_devices !== MAX_DEVICES || !Number.isInteger(result.active_devices) || result.active_devices < 1 || result.active_devices > MAX_DEVICES) {
           const denial = ['unauthenticated', 'not_owner', 'device_limit', 'session_revoked', 'invalid_session'].includes(result?.reason) ? result.reason : 'unavailable';
           lock(denial);
           return false;
         }
+        if(!offlineApproval)rememberOnlineApproval(session);
         const wasAuthorized = authorized();
         approvedSession = session;
         approvedIdentity = requestedIdentity;
@@ -210,6 +233,7 @@
     try {
       const {error} = await cloud.auth.signOut({scope: 'local'});
       if (error) throw new Error('Logout failed');
+      clearOfflineGrant();
       observeSession(null);
       lock('unauthenticated');
       // Check after sign-out so edits made while it was pending are preserved.
@@ -257,7 +281,7 @@
             const result = await rpc('personal_app_revoke_device', {p_session_id: device.session_id});
             if (requestedEpoch !== epoch) return;
             if (result?.revoked !== true) throw new Error('Revocation failed');
-            if (device.is_current) { lock('session_revoked'); await signOut(); return; }
+            if (device.is_current) { clearOfflineGrant(); lock('session_revoked'); await signOut(); return; }
             if (reason === 'device_limit') {
               devicesDialog.close();
               // A response started before revocation cannot confirm the newly
@@ -387,6 +411,7 @@
       const changed = observeSession(session);
       // SIGNED_OUT also invalidates a pending initial getSession(), before an
       // identity has been observed in this page.
+      if (_event === 'SIGNED_OUT') clearOfflineGrant();
       if (_event === 'SIGNED_OUT' && !changed) { epoch++; lock('unauthenticated'); }
       // getSession() already covers the initial identity. Supabase can also
       // repeat SIGNED_IN on focus; neither needs a second identical RPC.
