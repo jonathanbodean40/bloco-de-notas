@@ -1,0 +1,24 @@
+name: Signed Android distribution
+on:
+  push:
+    branches: [distribution/android]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish-signed-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify signed release checksum
+        shell: bash
+        run: |
+          echo "88483a249e3f805448efb3190634d22d23849fc6804f642a27c629cbae567ba7  releases/BlocoNotasPro-Android-0.1.0.apk" | sha256sum -c -
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlocoNotasPro-Android-Signed-Release
+          path: releases/BlocoNotasPro-Android-0.1.0.apk
+          if-no-files-found: error
+          retention-days: 90
