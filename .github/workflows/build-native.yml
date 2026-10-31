@@ -37,11 +37,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Prepare Android SDK
-        shell: bash
-        run: |
-          echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
-          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - uses: gradle/actions/setup-gradle@v4
       - run: npm ci --no-audit --no-fund
       - run: npm run test:independence
