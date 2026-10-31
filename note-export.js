@@ -115,7 +115,7 @@ function html(note,base,scope){
   '<meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; img-src data: https: http:; style-src &#39;unsafe-inline&#39;; base-uri &#39;none&#39;; form-action &#39;none&#39;">'+
   '<title>'+escapeHTML(title)+'</title><style>body{font:16px/1.6 system-ui,sans-serif;margin:24px auto;max-width:820px;padding:0 18px;color:#243442}a{color:#126085;overflow-wrap:anywhere}header{border-bottom:1px solid #dce4eb;padding-bottom:18px;margin-bottom:20px}h1{font-size:27px;line-height:1.25}h2{font-size:20px}section{margin:16px 0 28px;overflow-wrap:anywhere}img{max-width:100%;height:auto;border-radius:5px}figure{margin:14px 0}pre{white-space:pre-wrap}table{width:100%;border-collapse:collapse}td,th{padding:8px;border:1px solid #ddd}small{color:#5e7180}</style></head><body><header><h1>'+
   escapeHTML(title)+'</h1><p><small>Última alteração: '+escapeHTML(note.updatedAt||'')+
-  '</small></p><p><a href="'+escapeHTML(link(base,scope,note))+'" rel="noopener noreferrer" target="_blank">Abrir a nota original para editar</a></p></header><main>'+parts+'</main></body></html>';
+  '</small></p>'+(base?'<p><a href="'+escapeHTML(link(base,scope,note))+'" rel="noopener noreferrer" target="_blank">Abrir a nota original para editar</a></p>':'')+'</header><main>'+parts+'</main></body></html>';
 }
 function plainText(note,base,scope){
   const body=markdown(note,base,scope)
