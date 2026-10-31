@@ -8,3 +8,5 @@ dist/
 .env.*
 !.env.example
 native-auth.js
+*.p12
+*.dpapi
