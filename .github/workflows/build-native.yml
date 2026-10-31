@@ -44,10 +44,15 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run test:independence
       - run: npm run android:sync
-      - run: chmod +x ./gradlew && ./gradlew assembleDebug --no-daemon
+      - run: chmod +x ./gradlew && ./gradlew assembleDebug assembleRelease --no-daemon
         working-directory: android
       - uses: actions/upload-artifact@v4
         with:
           name: Bloco-Notas-Pro-Android-debug-test
           path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bloco-Notas-Pro-Android-unsigned-release
+          path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
