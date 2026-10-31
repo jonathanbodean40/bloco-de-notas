@@ -46,7 +46,7 @@ function harness({initialSession = null, restoration, response = good, configure
   const win = new EventTarget();
   const doc = new EventTarget();
   const elements = new Map();
-  const ids = ['private-app', 'private-access', 'private-login-form', 'private-access-message', 'private-startup-status', 'private-devices-dialog', 'private-devices-list', 'private-devices-message', 'private-device-name', 'private-email', 'private-password', 'private-retry-btn', 'private-manage-btn', 'private-logout-btn', 'private-login-btn', 'private-devices-refresh', 'private-devices-close', 'auth-dialog', 'auth-message'];
+  const ids = ['private-app', 'private-access', 'private-login-form', 'private-access-message', 'private-startup-status', 'private-devices-dialog', 'private-devices-list', 'private-devices-message', 'private-device-name', 'private-email', 'private-password', 'private-retry-btn', 'private-manage-btn', 'private-logout-btn', 'private-login-btn', 'private-google-btn', 'private-devices-refresh', 'private-devices-close', 'auth-dialog', 'auth-message'];
   for (const id of ids) {
     const element = new Element(id.includes('dialog') ? 'dialog' : 'div');
     const tag = htmlTag(id);
