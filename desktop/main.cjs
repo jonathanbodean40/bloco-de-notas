@@ -14,6 +14,20 @@ function resolveAsset(url) {
   if (target !== webRoot && !target.startsWith(webRoot + path.sep)) return null;
   return target;
 }
+let mainWindow;
+function authCallback(url){
+  if(typeof url!=='string'||!url.startsWith('notaspro://auth/callback?'))return;
+  const js='window.dispatchEvent(new CustomEvent("notas:auth-url",{detail:{url:'+JSON.stringify(url)+'}}));';
+  if(mainWindow&&!mainWindow.isDestroyed()){mainWindow.webContents.executeJavaScript(js).catch(()=>{});mainWindow.focus();}
+}
+if(process.defaultApp){/* Development mode needs its executable registered separately. */}
+else app.setAsDefaultProtocolClient('notaspro');
+const locked=app.requestSingleInstanceLock();
+if(!locked){app.quit();}
+else{
+  app.on('second-instance',(_event,argv)=>{const url=argv.find(v=>v.startsWith('notaspro://auth/callback?'));if(url)authCallback(url);});
+  app.on('open-url',(event,url)=>{event.preventDefault();authCallback(url);});
+}
 app.whenReady().then(() => {
   protocol.handle('notas', request => {
     try {
@@ -27,6 +41,7 @@ app.whenReady().then(() => {
       autoHideMenuBar:true,
       webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}
     });
+    mainWindow=win;
     win.webContents.setWindowOpenHandler(({url}) => {
       if (url.startsWith('notas://app/')) return {action:'allow'};
       if (url.startsWith('https://')) shell.openExternal(url);
