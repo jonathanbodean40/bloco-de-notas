@@ -249,6 +249,15 @@
   async function exportDropbox(w){
     const file=exportFile(w);
     if(window.NOTAS_NATIVE?.shareFile && await window.NOTAS_NATIVE.shareFile({target:'dropbox',title:w.title||'Nota',filename:file.name,content:await file.text()}))return;
+    if(window.NOTAS_DESKTOP?.saveFile){
+      const result=await window.NOTAS_DESKTOP.saveFile({filename:file.name,content:await file.text()});
+      if(result?.saved){
+        status.textContent='Nota completa guardada como HTML, com imagens e formatação.';
+        if(confirm('Abrir o Dropbox para carregar esta cópia?'))
+          window.open('https://www.dropbox.com/home','_blank','noopener,noreferrer');
+      }else status.textContent='Exportação cancelada; a nota original não foi alterada.';
+      return;
+    }
     if(location.protocol !== 'notas:' && navigator.canShare?.({files:[file]})){
       try{await navigator.share({files:[file],title:w.title||'Nota'});return;}catch(e){if(e.name==='AbortError')return;}
     }
