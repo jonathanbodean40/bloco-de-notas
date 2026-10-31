@@ -1,0 +1,11 @@
+{
+  "appId": "pt.keepaligner.notaspro",
+  "appName": "Bloco de Notas Pro",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
