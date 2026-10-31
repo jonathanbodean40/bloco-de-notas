@@ -1,5 +1,6 @@
 'use strict';
-const { app, BrowserWindow, protocol, net, shell } = require('electron');
+const { app, BrowserWindow, protocol, net, shell, ipcMain, dialog } = require('electron');
+const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -37,6 +38,24 @@ else{
   app.on('open-url',(event,url)=>{event.preventDefault();authCallback(url);});
 }
 app.whenReady().then(() => {
+  ipcMain.handle('notas:export-file', async (event, payload) => {
+    if(!payload || typeof payload.filename!=='string' || typeof payload.content!=='string')
+      throw new Error('Exportação inválida');
+    if(Buffer.byteLength(payload.content,'utf8') > 30*1024*1024)
+      throw new Error('Nota demasiado grande para esta exportação');
+    let name=path.basename(payload.filename).replace(/[^A-Za-z0-9_.-]/g,'-').slice(0,120);
+    if(!name.endsWith('.html')&&!name.endsWith('.txt'))name='Nota.html';
+    const owner=BrowserWindow.fromWebContents(event.sender);
+    if(!owner || !event.sender.getURL().startsWith('notas://app/'))
+      throw new Error('Janela não autorizada');
+    const response=await dialog.showSaveDialog(owner,{
+      title:'Guardar cópia da nota',defaultPath:name,
+      filters:[{name:'Nota HTML',extensions:['html']},{name:'Texto',extensions:['txt']}]
+    });
+    if(response.canceled || !response.filePath)return {saved:false};
+    await fs.writeFile(response.filePath,payload.content,{encoding:'utf8',flag:'w'});
+    return {saved:true};
+  });
   protocol.handle('notas', request => {
     try {
       const target = resolveAsset(request.url);
@@ -47,7 +66,7 @@ app.whenReady().then(() => {
     const win = new BrowserWindow({
       width:1200,height:820,minWidth:780,minHeight:520,
       autoHideMenuBar:true,
-      webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}
+      webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,preload:path.join(__dirname,'preload.cjs')}
     });
     mainWindow=win;
     win.webContents.setWindowOpenHandler(({url}) => {
