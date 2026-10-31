@@ -238,12 +238,17 @@
     catch{status.textContent='Não foi possível copiar. Verifique a permissão da área de transferência.';}
   }
   function exportFile(w){
-    const content=exportText(w), title=(w.title||'Nota').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'-').slice(0,60)||'Nota';
-    return new File([content],title+'.txt',{type:'text/plain;charset=utf-8'});
+    captureTextBoxes(w);
+    const exported=window.NotasReadableExport?.make({
+      id:w.id,title:w.title||'Sem título',
+      content:encode(w),updatedAt:w.savedAt||new Date().toISOString()
+    },'html','',user.id);
+    if(!exported)throw Error('Não foi possível preparar a nota completa para exportação.');
+    return new File([exported.data],exported.name,{type:exported.mime});
   }
   async function exportDropbox(w){
     const file=exportFile(w);
-    if(window.NOTAS_NATIVE?.shareFile && await window.NOTAS_NATIVE.shareFile({title:w.title||'Nota',filename:file.name,text:exportText(w)}))return;
+    if(window.NOTAS_NATIVE?.shareFile && await window.NOTAS_NATIVE.shareFile({target:'dropbox',title:w.title||'Nota',filename:file.name,content:await file.text()}))return;
     if(navigator.canShare?.({files:[file]})){
       try{await navigator.share({files:[file],title:w.title||'Nota'});return;}catch(e){if(e.name==='AbortError')return;}
     }
@@ -260,8 +265,8 @@
     const actions=document.createElement('div');actions.className='dialog-actions';
     function action(label,handler){const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',()=>{dialog.close();Promise.resolve(handler()).catch(()=>{status.textContent='Não foi possível concluir a exportação.';});});actions.append(b);}
     action('Dropbox',()=>exportDropbox(w));
-    action('WhatsApp',async()=>{const message=exportText(w).slice(0,6000);if(await window.NOTAS_NATIVE?.shareText?.({title:w.title||'Nota',text:message}))return;window.open('https://wa.me/?text='+encodeURIComponent(message),'_blank','noopener,noreferrer');});
-    action('Gmail',async()=>{const message=exportText(w).slice(0,6000);if(await window.NOTAS_NATIVE?.shareText?.({title:w.title||'Nota',text:message}))return;const url='https://mail.google.com/mail/?view=cm&fs=1&su='+encodeURIComponent(w.title||'Nota')+'&body='+encodeURIComponent(message);window.open(url,'_blank','noopener,noreferrer');});
+    action('WhatsApp',async()=>{const message=exportText(w).slice(0,6000);if(await window.NOTAS_NATIVE?.shareText?.({target:'whatsapp',title:w.title||'Nota',text:message}))return;window.open('https://wa.me/?text='+encodeURIComponent(message),'_blank','noopener,noreferrer');});
+    action('Gmail',async()=>{const message=exportText(w).slice(0,6000);if(await window.NOTAS_NATIVE?.shareText?.({target:'gmail',title:w.title||'Nota',text:message}))return;const url='https://mail.google.com/mail/?view=cm&fs=1&su='+encodeURIComponent(w.title||'Nota')+'&body='+encodeURIComponent(message);window.open(url,'_blank','noopener,noreferrer');});
     action('Copiar texto',()=>copyExportText(w));
     action('Cancelar',()=>{});
     dialog.append(actions);document.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();
