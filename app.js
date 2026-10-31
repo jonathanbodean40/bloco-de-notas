@@ -1009,6 +1009,8 @@
   // Pointer capture and re-rendering keep their target on this stable list.
   $('#sidebar-notes-list').addEventListener('contextmenu',e=>{if(!e.target.closest('input'))e.preventDefault();});
   $('#sidebar-notes-list').addEventListener('auxclick',e=>{if(e.button===2&&!e.target.closest('input'))e.preventDefault();});
+  const linkGoogleButton=document.querySelector('#link-google-btn');
+  if(linkGoogleButton)linkGoogleButton.addEventListener('click',()=>void privateAccess.linkGoogle?.());
   setupMenu();setupLinks();setAuthView();restoreWorkspace();renderNotes();restorePrivateDrafts();
   window.dispatchEvent(new Event('notas:private-ready'));
   scheduleSync();
