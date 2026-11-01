@@ -3,6 +3,12 @@ const { app, BrowserWindow, protocol, net, shell, ipcMain, dialog } = require('e
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { randomUUID } = require('node:crypto');
+const keepAgentRoot=path.join(process.env.LOCALAPPDATA || app.getPath('home'), 'KeepAligner', 'LocalAgent');
+function authorisedWindow(event){
+  return Boolean(BrowserWindow.fromWebContents(event.sender) && event.sender.getURL().startsWith('notas://app/'));
+}
+
 
 protocol.registerSchemesAsPrivileged([{scheme:'notas',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true}}]);
 
@@ -38,6 +44,43 @@ else{
   app.on('open-url',(event,url)=>{event.preventDefault();authCallback(url);});
 }
 app.whenReady().then(() => {
+  // Local queue only. Electron never receives a shell command or free-form
+  // executable path from the note application. The worker validates again.
+  ipcMain.handle('notas:keep-queue', async (event, input) => {
+    if(!authorisedWindow(event) || !input || typeof input!=='object')
+      throw new Error('Pedido não autorizado');
+    const fields=['reference','planning','version','notes','status','kind'];
+    const values=Object.fromEntries(fields.map(key=>[key,typeof input[key]==='string'?input[key].trim():'']));
+    if(!['guide','presentation'].includes(input.mode)
+      || !values.reference || values.reference.length>2000 || /[\\x00-\\x1F]/.test(values.reference)
+      || values.planning.length>6000 || (values.planning && !values.planning.startsWith('https://'))
+      || values.version.length>160 || values.notes.length>2000
+      || !['unknown','review','approved'].includes(values.status)
+      || !['unknown','new','modified','refinement'].includes(values.kind))
+      throw new Error('Dados do pedido inválidos');
+    const id=randomUUID().replace(/-/g,'');
+    const queue=path.join(keepAgentRoot,'inbox');
+    await fs.mkdir(queue,{recursive:true});
+    const request={id,state:'queued',createdAt:new Date().toISOString(),
+      request:{mode:input.mode,...values}};
+    const tmp=path.join(queue,id+'.tmp');
+    const dest=path.join(queue,id+'.json');
+    await fs.writeFile(tmp,JSON.stringify(request,null,2),{encoding:'utf8',flag:'wx'});
+    await fs.rename(tmp,dest);
+    return {id,state:'queued'};
+  });
+  ipcMain.handle('notas:keep-status', async (event, id) => {
+    if(!authorisedWindow(event) || typeof id!=='string' || !/^[a-f0-9]{32}$/.test(id))
+      throw new Error('Pedido não autorizado');
+    const target=path.join(keepAgentRoot,'results',id+'.json');
+    try {
+      const payload=JSON.parse(await fs.readFile(target,'utf8'));
+      return {id,state:payload.state||'blocked',message:String(payload.message||'').slice(0,300)};
+    } catch(error){
+      if(error?.code==='ENOENT')return {id,state:'queued'};
+      throw new Error('Não foi possível consultar o executor');
+    }
+  });
   ipcMain.handle('notas:export-file', async (event, payload) => {
     if(!payload || typeof payload.filename!=='string' || typeof payload.content!=='string')
       throw new Error('Exportação inválida');
