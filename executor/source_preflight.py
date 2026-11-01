@@ -6,6 +6,7 @@ uploads, copying or publication. This validates *only* local staged evidence.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import re
@@ -72,6 +73,17 @@ def _verified_file(root: Path, record: dict, label: str, image: bool) -> tuple[i
     if not image:
         if path.suffix.lower() != ".csv":
             raise PreflightError(f"{label}: tipo de exportação inválido")
+        # A hash alone would accept a zero-byte or unreadable CSV as evidence.
+        # Validate only the header; clinical values remain unexamined.
+        try:
+            with path.open("r", encoding="utf-8-sig", newline="") as stream:
+                header = next(csv.reader(stream, strict=True), None)
+        except (OSError, UnicodeError, csv.Error) as exc:
+            raise PreflightError(f"{label}: CSV ilegível") from exc
+        if (not header or len(header) > 128
+                or any(not name.strip() or len(name) > 256
+                       or any(ord(char) < 32 for char in name) for name in header)):
+            raise PreflightError(f"{label}: cabeçalho CSV inválido")
         return None
     if path.suffix.lower() != ".png":
         raise PreflightError(f"{label}: captura deve ser PNG")
