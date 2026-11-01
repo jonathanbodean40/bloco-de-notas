@@ -30,3 +30,11 @@ Os testes sintéticos exercitam enfileiramento, execução e resposta `awaiting_
 5. Fazer revisão visual e clínica com FDI e regras KEEP ALIGNER antes de qualquer arquivo em INFORME.
 
 A versão Windows instalada não é alterada por estas edições de código; requer compilação, ensaio e aprovação separados.
+
+
+## Fortalecimento do preflight de exportações CSV (01/11/2026)
+- `executor/source_preflight.py` confirma agora, além da extensão e do SHA-256, que os CSV `ipr_csv` e `attachments_csv` incluem um cabeçalho legível em UTF-8 (incluindo BOM opcional), não vazio e dentro de limites explícitos. CSV de zero bytes, codificação inválida e cabeçalhos vazios são rejeitados como evidência.
+- A verificação lê apenas o cabeçalho; **não valida valores clínicos, numeração FDI, etapas de IPR ou posições de attachments**. Um resultado `ok=true` significa somente integridade e formato da fonte, não prontidão clínica ou autorização para arquivo.
+- No MSI, `python -m unittest discover -s ...\\tests -p test_source_preflight.py -v` passou **16 testes fictícios** após a alteração (12 anteriores e 4 novos). O executor isolado e `npm run test:independence` também passaram.
+- Commits do ramo de desenvolvimento: `864e564d` (validador) e `2923e776` (testes). O ficheiro local do validador ainda é experimental; a instalação Windows 0.1.3 não foi substituída e as fontes clínicas reais continuam excluídas.
+- A integração com My Keep/Hirsch/Onyx, a verificação visual dos contactos oclusais e a identidade do caso permanecem **não validadas**.
