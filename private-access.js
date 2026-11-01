@@ -331,7 +331,8 @@
     } catch { renderState('unauthenticated', 'Não foi possível iniciar sessão. Verifique a ligação à Internet.'); }
     finally { authBusy = false; $('#private-login-btn').disabled = false; $('#private-logout-btn').disabled = false; }
   });
-  const nativePlatform = Boolean(window.Capacitor?.isNativePlatform?.()) || location.protocol === 'notas:';
+  const nativePlatform = window.NOTAS_NATIVE?.isNative === true || location.protocol === 'notas:';
+  // Always return a native OAuth flow to this installed application, never to the legacy website.
   const oauthCallback = 'notaspro://auth/callback';
   async function beginGoogleLogin(){
     if(!cloud||authBusy)return;
