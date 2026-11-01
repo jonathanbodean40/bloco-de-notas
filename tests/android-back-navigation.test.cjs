@@ -51,6 +51,24 @@ const {start}=require('./support/keep-aligner-preview.cjs');
    assert.equal(note.prevented,true,'Back in note should not exit directly');
    await returning;
    await page.locator('#sidebar.active').waitFor();
-   console.log('PASS: Android Back dismisses note options, returns to notes home, and permits native exit on home.');
+
+   await page.goto(base+'/?note=keep-demo-note&scope=keep-tool-demo');
+   const dirtyEditor=page.locator('.note-editor');
+   await dirtyEditor.waitFor();
+   await dirtyEditor.fill('Rascunho fictício guardado com o botão Voltar.');
+   const returnFromDirty=page.waitForURL(u=>!new URL(u).searchParams.has('note'),{timeout:15000});
+   const dirtyBack=await page.evaluate(()=>{
+     const event=new Event('notas:android-back',{cancelable:true});
+     window.dispatchEvent(event);
+     return event.defaultPrevented;
+   });
+   assert.equal(dirtyBack,true,'Back should handle the dirty note in the app');
+   await returnFromDirty;
+   const saved=await page.evaluate(()=>{
+     const text=localStorage.getItem('notas-exclusivas-pro-v2:keep-tool-demo:entry:keep-demo-note')||'';
+     return text.includes('Rascunho fictício guardado');
+   });
+   assert(saved,'Back must locally save note changes before leaving the editor');
+   console.log('PASS: Android Back dismisses note options, preserves edits, returns home and permits native exit.');
  }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e.stack);process.exitCode=1});
