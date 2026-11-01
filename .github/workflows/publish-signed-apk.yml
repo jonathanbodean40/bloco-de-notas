@@ -15,10 +15,10 @@ jobs:
       - name: Verify signed release checksum
         shell: bash
         run: |
-          echo "88483a249e3f805448efb3190634d22d23849fc6804f642a27c629cbae567ba7  releases/BlocoNotasPro-Android-0.1.0.apk" | sha256sum -c -
+          echo "b52738e15e801df08d7882eb0f02becdac8b560fe1372c16ffb8620f36a3180e  releases/BlocoNotasPro-Android-1.0.2.apk" | sha256sum -c -
       - uses: actions/upload-artifact@v4
         with:
-          name: BlocoNotasPro-Android-Signed-Release
-          path: releases/BlocoNotasPro-Android-0.1.0.apk
+          name: BlocoNotasPro-Android-Signed-Release-1.0.2
+          path: releases/BlocoNotasPro-Android-1.0.2.apk
           if-no-files-found: error
           retention-days: 90
