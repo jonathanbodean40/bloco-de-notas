@@ -57,12 +57,11 @@ const {start}=require('./support/keep-aligner-preview.cjs');
    await dirtyEditor.waitFor();
    await dirtyEditor.fill('Rascunho fictício guardado com o botão Voltar.');
    const returnFromDirty=page.waitForURL(u=>!new URL(u).searchParams.has('note'),{timeout:15000});
-   const dirtyBack=await page.evaluate(()=>{
-     const event=new Event('notas:android-back',{cancelable:true});
-     window.dispatchEvent(event);
-     return event.defaultPrevented;
-   });
-   assert.equal(dirtyBack,true,'Back should handle the dirty note in the app');
+   // Schedule the navigation after evaluate() returns; closing/reloading the
+   // current WebView during a synchronous evaluation can cancel Playwright IPC.
+   await page.evaluate(()=>setTimeout(()=>{
+     window.dispatchEvent(new Event('notas:android-back',{cancelable:true}));
+   },0));
    await returnFromDirty;
    const saved=await page.evaluate(()=>{
      const text=localStorage.getItem('notas-exclusivas-pro-v2:keep-tool-demo:entry:keep-demo-note')||'';
