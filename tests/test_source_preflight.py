@@ -133,5 +133,44 @@ class PreflightTests(unittest.TestCase):
         self.assertFalse(self.check()["ok"])
 
 
+    def test_rejects_duplicate_json_keys(self):
+        payload = json.dumps(self.data)
+        payload = payload.replace('"plan_id":', '"plan_id": "SYNTHETIC-AMBIGUOUS", "plan_id":', 1)
+        self.manifest.write_text(payload, encoding="utf-8")
+        report = inspect_manifest(self.manifest)
+        self.assertFalse(report["ok"])
+        self.assertIn("Metadados repetidos", report["errors"][0])
+
+    def test_rejects_unexpected_manifest_fields(self):
+        self.data["session_token"] = "SYNTHETIC-NOT-ALLOWED"
+        self.assertFalse(self.check()["ok"])
+
+    def test_rejects_unexpected_source_fields(self):
+        self.data["sources"][0]["session_token"] = "SYNTHETIC-NOT-ALLOWED"
+        self.assertFalse(self.check()["ok"])
+
+    def test_rejects_unexpected_capture_fields(self):
+        self.data["captures"][0]["session_token"] = "SYNTHETIC-NOT-ALLOWED"
+        self.assertFalse(self.check()["ok"])
+
+    def test_rejects_same_png_reused_for_two_captures(self):
+        first = self.data["captures"][0]
+        self.data["captures"][1]["path"] = first["path"]
+        self.data["captures"][1]["sha256"] = first["sha256"]
+        self.assertFalse(self.check()["ok"])
+
+    def test_rejects_reused_csv_between_source_types(self):
+        self.add_csv(b"tooth,step,amount\\n")
+        csv_source = self.data["sources"][-1]
+        self.data["sources"].append({**csv_source, "kind": "attachments_csv"})
+        self.assertFalse(self.check()["ok"])
+
+    def test_rejects_same_png_as_source_and_capture(self):
+        capture = self.data["captures"][0]
+        self.data["sources"][0]["path"] = capture["path"]
+        self.data["sources"][0]["sha256"] = capture["sha256"]
+        self.assertFalse(self.check()["ok"])
+
+
 if __name__ == "__main__":
     unittest.main()
