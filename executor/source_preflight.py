@@ -24,11 +24,27 @@ PHASES = ("initial", "final")
 CAPTURE_SEQUENCE = [(phase, view) for phase in PHASES for view in VIEWS]
 PROVIDERS = {"MyKeep", "HirschDynamics", "OnyxCeph", "DigitalSmile"}
 SOURCE_KINDS = {"ipr_csv", "attachments_csv", "movement_table"}
+MANIFEST_FIELDS = {"schema_version", "plan_id", "package_type", "captures", "sources"}
+SOURCE_FIELDS = {"kind", "provider", "plan_id", "path", "sha256"}
+CAPTURE_FIELDS = {
+    "path", "sha256", "provider", "plan_id", "phase", "view",
+    "contacts_off", "orientation_ref", "scale_ref",
+}
 SHA = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class PreflightError(ValueError):
     """Errors must not expose paths, clinical data or patient identifiers."""
+
+
+def _unique_keys(pairs: list[tuple[str, object]]) -> dict:
+    """Reject ambiguous metadata and unexpected duplicate JSON keys."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise PreflightError("Metadados repetidos no manifesto")
+        result[key] = value
+    return result
 
 
 def _nonempty(value: object, limit: int = 160) -> bool:
@@ -110,8 +126,10 @@ def inspect_manifest(path: Path) -> dict:
     try:
         if path.stat().st_size > MAX_MANIFEST_BYTES:
             raise PreflightError("Manifesto demasiado grande")
-        manifest = json.loads(path.read_text(encoding="utf-8-sig"))
-        if (not isinstance(manifest, dict) or type(manifest.get("schema_version")) is not int
+        manifest = json.loads(path.read_text(encoding="utf-8-sig"),
+                              object_pairs_hook=_unique_keys)
+        if (not isinstance(manifest, dict) or set(manifest) != MANIFEST_FIELDS
+                or type(manifest.get("schema_version")) is not int
                 or manifest["schema_version"] != SCHEMA):
             raise PreflightError("Versão do manifesto inválida")
         if not _nonempty(manifest.get("plan_id")):
@@ -130,14 +148,19 @@ def inspect_manifest(path: Path) -> dict:
         if mode != "full_presentation" and captures:
             raise PreflightError("Capturas não previstas para este tipo de pacote")
         source_seen = set()
+        asset_seen = set()
         for index, record in enumerate(sources, 1):
             label = f"Fonte {index}"
-            if not isinstance(record, dict):
+            if not isinstance(record, dict) or set(record) != SOURCE_FIELDS:
                 raise PreflightError(f"{label}: estrutura inválida")
             kind = record.get("kind")
             if kind not in SOURCE_KINDS or kind in source_seen:
                 raise PreflightError(f"{label}: tipo repetido ou inválido")
             source_seen.add(kind)
+            relative = record.get("path")
+            if not isinstance(relative, str) or relative.casefold() in asset_seen:
+                raise PreflightError(f"{label}: recurso duplicado ou inválido")
+            asset_seen.add(relative.casefold())
             if record.get("provider") != "OnyxCeph" or record.get("plan_id") != plan_id:
                 raise PreflightError(f"{label}: origem/versão incompatível")
             _verified_file(root, record, label, image=kind == "movement_table")
@@ -148,7 +171,7 @@ def inspect_manifest(path: Path) -> dict:
         dimensions = {}
         for index, record in enumerate(captures, 1):
             label = f"Captura {index}"
-            if not isinstance(record, dict):
+            if not isinstance(record, dict) or set(record) != CAPTURE_FIELDS:
                 raise PreflightError(f"{label}: estrutura inválida")
             key = (record.get("phase"), record.get("view"))
             if key not in CAPTURE_SEQUENCE or key in seen:
@@ -156,6 +179,10 @@ def inspect_manifest(path: Path) -> dict:
             if key != CAPTURE_SEQUENCE[index - 1]:
                 raise PreflightError(f"{label}: ordem não coincide com o modelo")
             seen.add(key)
+            relative = record.get("path")
+            if not isinstance(relative, str) or relative.casefold() in asset_seen:
+                raise PreflightError(f"{label}: recurso duplicado ou inválido")
+            asset_seen.add(relative.casefold())
             if record.get("provider") not in PROVIDERS or record.get("plan_id") != plan_id:
                 raise PreflightError(f"{label}: origem/versão incompatível")
             if record.get("contacts_off") is not True:
