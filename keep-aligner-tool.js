@@ -37,7 +37,18 @@
     if (data.notes) lines.push('', 'Informação adicional fornecida para este caso:', data.notes);
     return lines.join('\n');
   }
-  if (typeof module === 'object' && module.exports) module.exports = {buildPrompt};
+  const activeLocalStates = new Set(['queued','validating_sources','generating','validating_outputs']);
+  function localStatus(value = {}) {
+    const state=String(value.state || 'unavailable');
+    const pending=activeLocalStates.has(state);
+    let message=String(value.message || (pending ? 'Pedido em processamento no MSI.' : 'Estado técnico: '+state+'.')).slice(0,300);
+    if (value.progress && Number.isInteger(value.progress.step) && value.progress.step>=1 && value.progress.step<=3 && value.progress.total===3)
+      message+=' Etapa '+value.progress.step+'/3.';
+    if (state==='awaiting_visual_review' && Number.isInteger(value.artifactCount) && value.artifactCount>0 && value.artifactCount<=32)
+      message+=' '+value.artifactCount+' ficheiros verificados. Revisão humana obrigatória.';
+    return {pending,message,clinicalApproval:false,publishingAuthorized:false};
+  }
+  if (typeof module === 'object' && module.exports) module.exports = {buildPrompt,localStatus};
   if (!root.document) return;
   const doc = root.document, dialog = doc.getElementById('keep-aligner-dialog'), opener = doc.getElementById('keep-aligner-tool-btn');
   if (!dialog || !opener) return;
@@ -148,9 +159,7 @@
           const current=await root.NOTAS_DESKTOP.keepJobStatus(ticket);
           if (ticket!==lastLocalTicket || !unlocked()) return;
           status.dataset.state=current.state==='blocked'?'error':'manual';
-          status.textContent=current.message||(current.state==='queued'
-            ? 'Pedido ainda na fila do MSI; preparação não confirmada.'
-            : 'Estado técnico: '+String(current.state||'indisponível')+'. Revisão clínica obrigatória.');
+          status.textContent=localStatus(current).message;
         } catch {
           if (ticket===lastLocalTicket && unlocked()) {
             status.dataset.state='error';
@@ -188,16 +197,17 @@
               await new Promise(resolve=>root.setTimeout(resolve,850));
               const state=await root.NOTAS_DESKTOP.keepJobStatus(ticket.id);
               if(ticket.id!==lastLocalTicket || !unlocked())break;
-              if(state.state==='queued')continue;
+              const current=localStatus(state);
+              status.dataset.state=state.state==='blocked'?'error':'manual';
+              status.textContent=current.message;
+              if(current.pending)continue;
               receivedResult=true;
               // A generated technical draft or missing source is never approval.
-              status.dataset.state=state.state==='blocked'?'error':'manual';
-              status.textContent=state.message||('Estado: '+state.state);
               break;
             }
             if(!receivedResult && ticket.id===lastLocalTicket && unlocked()){
               status.dataset.state='manual';
-              status.textContent='Pedido ainda na fila do MSI. A geração não foi confirmada.';
+              status.textContent+=' O processamento ainda não terminou. Use Consultar estado do último pedido.';
             }
           }
         }catch(error){

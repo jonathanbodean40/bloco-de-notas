@@ -5,7 +5,7 @@ const root = path.resolve(__dirname, '../..');
 const bootstrap = path.join(__dirname, 'keep-aligner-preview-bootstrap.js');
 const allowed = new Set([
   'index.html','app.js','style.css','keep-aligner-tool.css','keep-aligner-tool.js',
-  'notes-extras.css',
+  'notes-extras.css','note-export.js',
   'icon.svg','manifest.webmanifest','spell-worker.js','service-worker.js'
 ]);
 const types = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'};
@@ -19,6 +19,7 @@ function start(port = 4397) {
     if (file === 'config.js') bytes = 'window.NOTAS_CONFIG={preview:true};';
     else if (file === 'private-access.js') bytes = fs.readFileSync(bootstrap);
     else if (file === 'vendor/supabase-js-v2.js') bytes = '/* No backend in local preview. */';
+    else if (file === 'native-auth.js') bytes = '/* Native authentication disabled in synthetic browser preview. */';
     else if (allowed.has(file)) bytes = fs.readFileSync(path.join(root,file));
     else return res.writeHead(404).end();
     res.setHeader('Content-Type', `${types[path.extname(file)] || 'text/plain'}; charset=utf-8`);

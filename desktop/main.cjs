@@ -75,7 +75,13 @@ app.whenReady().then(() => {
     const target=path.join(keepAgentRoot,'results',id+'.json');
     try {
       const payload=JSON.parse(await fs.readFile(target,'utf8'));
-      return {id,state:payload.state||'blocked',message:String(payload.message||'').slice(0,300)};
+      const progress=payload.progress;
+      const safeProgress=progress && Number.isInteger(progress.step) && progress.step>=1 && progress.step<=3 && progress.total===3
+        ? {step:progress.step,total:3}:null;
+      const report=payload.artifactReport;
+      const artifactCount=report?.verified===true && Array.isArray(report.files) ? report.files.length:0;
+      return {id,state:payload.state||'blocked',message:String(payload.message||'').slice(0,300),
+        progress:safeProgress,artifactCount,clinicalApproval:false,publishingAuthorized:false};
     } catch(error){
       if(error?.code==='ENOENT')return {id,state:'queued'};
       throw new Error('Não foi possível consultar o executor');

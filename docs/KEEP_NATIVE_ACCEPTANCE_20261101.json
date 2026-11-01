@@ -1,0 +1,301 @@
+{
+    "recordedAtUtc":  "2026-11-01T23:47:39.7928405Z",
+    "syntheticOnly":  true,
+    "nativeAcceptancePassed":  true,
+    "resumeVerified":  true,
+    "clinicalApproval":  false,
+    "publishingAuthorized":  false,
+    "templates":  "created from scratch; NOT clinical templates",
+    "sourceCodeSha256":  {
+                             "keep_aligner.py":  "8930ded33f332b7cf458d00907dbcbbd1ce5a618454bc9951c7ec22a4bc5a435",
+                             "ka_core.py":  "f3285f652546864109265c2a9bb6b20583091f6ce7174096d9de37f25e97fb1b",
+                             "ka_pptx.py":  "d5d71edd1798d1b9c9d96b216851944ad289a3232c37c5bedc53de73928744e8",
+                             "native-render.ps1":  "14aed1245705cf1a7e2154445cb9679eddc8c54590e96e50d3cc3a18a608edf7"
+                         },
+    "runs":  [
+                 {
+                     "mode":  "guide",
+                     "state":  "awaiting_visual_review",
+                     "verified":  true,
+                     "nativeRendered":  true,
+                     "fileCount":  4,
+                     "files":  [
+                                   {
+                                       "name":  "GUIA.pptx",
+                                       "sha256":  "f48233dddfe5c2ed79e71ef122e13f33d871c29b4c91435e7bf10bbfa1bc5b72",
+                                       "bytes":  30953
+                                   },
+                                   {
+                                       "name":  "guide-1.png",
+                                       "sha256":  "1e3c26526b73232e9ba8e570bd41cbd6b293eedb1a131da148c352c883e54a7b",
+                                       "bytes":  18188
+                                   },
+                                   {
+                                       "name":  "guide-2.png",
+                                       "sha256":  "947e6b08e75e5cff5aecc542729cbbf34e03f792c96f18f8fd7d458df8c84491",
+                                       "bytes":  38751
+                                   },
+                                   {
+                                       "name":  "guide-native.json",
+                                       "sha256":  "89d46277c1d01cf543f3381691187924031ffd24f7c3fcd80a90b51451da5d9f",
+                                       "bytes":  5614
+                                   }
+                               ],
+                     "progress":  {
+                                      "step":  3,
+                                      "total":  3
+                                  },
+                     "generatorStages":  [
+                                             {
+                                                 "stage":  "input",
+                                                 "status":  "built",
+                                                 "seconds":  0.063
+                                             },
+                                             {
+                                                 "stage":  "guide",
+                                                 "status":  "built",
+                                                 "seconds":  0.047
+                                             },
+                                             {
+                                                 "stage":  "guide_validation",
+                                                 "status":  "built",
+                                                 "seconds":  0.031
+                                             },
+                                             {
+                                                 "stage":  "guide_render",
+                                                 "status":  "built",
+                                                 "seconds":  1.375
+                                             },
+                                             {
+                                                 "stage":  "preview",
+                                                 "status":  "built",
+                                                 "seconds":  0.031
+                                             }
+                                         ]
+                 },
+                 {
+                     "mode":  "presentation",
+                     "state":  "awaiting_visual_review",
+                     "verified":  true,
+                     "nativeRendered":  true,
+                     "fileCount":  9,
+                     "files":  [
+                                   {
+                                       "name":  "ANTES E DEPOIS.pptx",
+                                       "sha256":  "eaa8dc6b7c54ed6c08e7d3bb7527be7feff37640498292735ac8793f4322b34d",
+                                       "bytes":  56117
+                                   },
+                                   {
+                                       "name":  "GUIA.pptx",
+                                       "sha256":  "f48233dddfe5c2ed79e71ef122e13f33d871c29b4c91435e7bf10bbfa1bc5b72",
+                                       "bytes":  30953
+                                   },
+                                   {
+                                       "name":  "RELATORIO CLINICO.txt",
+                                       "sha256":  "525d7d69cf66637fc5b934e1d65f3a9bb70e97044091bca3075ef6a9af9c4741",
+                                       "bytes":  618
+                                   },
+                                   {
+                                       "name":  "comparison-1.png",
+                                       "sha256":  "458e4d684124586c99c484a87fa1e846444cbe0da9025f5d710326d81e888829",
+                                       "bytes":  356342
+                                   },
+                                   {
+                                       "name":  "comparison-native.json",
+                                       "sha256":  "3067355a407cab7dbe2d0c876616a848406af8d5e5c2331d808ae4282aa9ad72",
+                                       "bytes":  1770
+                                   },
+                                   {
+                                       "name":  "guide-1.png",
+                                       "sha256":  "1e3c26526b73232e9ba8e570bd41cbd6b293eedb1a131da148c352c883e54a7b",
+                                       "bytes":  18188
+                                   },
+                                   {
+                                       "name":  "guide-2.png",
+                                       "sha256":  "947e6b08e75e5cff5aecc542729cbbf34e03f792c96f18f8fd7d458df8c84491",
+                                       "bytes":  38751
+                                   },
+                                   {
+                                       "name":  "guide-native.json",
+                                       "sha256":  "0356c2cb93fc7cb227abcd9b12f260f7a14c034ca0c4e7053de239ff37f37f0f",
+                                       "bytes":  5628
+                                   },
+                                   {
+                                       "name":  "movement-table.png",
+                                       "sha256":  "7b2366a4d5303e5fee03bde57e4afe38b629e08928c7a28e60319a78ac1c82ae",
+                                       "bytes":  3804
+                                   }
+                               ],
+                     "progress":  {
+                                      "step":  3,
+                                      "total":  3
+                                  },
+                     "generatorStages":  [
+                                             {
+                                                 "stage":  "input",
+                                                 "status":  "built",
+                                                 "seconds":  0.016
+                                             },
+                                             {
+                                                 "stage":  "guide",
+                                                 "status":  "built",
+                                                 "seconds":  0.015
+                                             },
+                                             {
+                                                 "stage":  "guide_validation",
+                                                 "status":  "built",
+                                                 "seconds":  0.016
+                                             },
+                                             {
+                                                 "stage":  "guide_render",
+                                                 "status":  "built",
+                                                 "seconds":  1.328
+                                             },
+                                             {
+                                                 "stage":  "comparison",
+                                                 "status":  "built",
+                                                 "seconds":  0.063
+                                             },
+                                             {
+                                                 "stage":  "comparison_validation",
+                                                 "status":  "built",
+                                                 "seconds":  0.047
+                                             },
+                                             {
+                                                 "stage":  "comparison_render",
+                                                 "status":  "built",
+                                                 "seconds":  3.578
+                                             },
+                                             {
+                                                 "stage":  "movement_table",
+                                                 "status":  "built",
+                                                 "seconds":  0.016
+                                             },
+                                             {
+                                                 "stage":  "presentation_text",
+                                                 "status":  "built",
+                                                 "seconds":  0.0
+                                             },
+                                             {
+                                                 "stage":  "preview",
+                                                 "status":  "built",
+                                                 "seconds":  0.0
+                                             }
+                                         ]
+                 },
+                 {
+                     "mode":  "presentation",
+                     "state":  "awaiting_visual_review",
+                     "verified":  true,
+                     "nativeRendered":  true,
+                     "fileCount":  9,
+                     "files":  [
+                                   {
+                                       "name":  "ANTES E DEPOIS.pptx",
+                                       "sha256":  "eaa8dc6b7c54ed6c08e7d3bb7527be7feff37640498292735ac8793f4322b34d",
+                                       "bytes":  56117
+                                   },
+                                   {
+                                       "name":  "GUIA.pptx",
+                                       "sha256":  "f48233dddfe5c2ed79e71ef122e13f33d871c29b4c91435e7bf10bbfa1bc5b72",
+                                       "bytes":  30953
+                                   },
+                                   {
+                                       "name":  "RELATORIO CLINICO.txt",
+                                       "sha256":  "525d7d69cf66637fc5b934e1d65f3a9bb70e97044091bca3075ef6a9af9c4741",
+                                       "bytes":  618
+                                   },
+                                   {
+                                       "name":  "comparison-1.png",
+                                       "sha256":  "458e4d684124586c99c484a87fa1e846444cbe0da9025f5d710326d81e888829",
+                                       "bytes":  356342
+                                   },
+                                   {
+                                       "name":  "comparison-native.json",
+                                       "sha256":  "3067355a407cab7dbe2d0c876616a848406af8d5e5c2331d808ae4282aa9ad72",
+                                       "bytes":  1770
+                                   },
+                                   {
+                                       "name":  "guide-1.png",
+                                       "sha256":  "1e3c26526b73232e9ba8e570bd41cbd6b293eedb1a131da148c352c883e54a7b",
+                                       "bytes":  18188
+                                   },
+                                   {
+                                       "name":  "guide-2.png",
+                                       "sha256":  "947e6b08e75e5cff5aecc542729cbbf34e03f792c96f18f8fd7d458df8c84491",
+                                       "bytes":  38751
+                                   },
+                                   {
+                                       "name":  "guide-native.json",
+                                       "sha256":  "0356c2cb93fc7cb227abcd9b12f260f7a14c034ca0c4e7053de239ff37f37f0f",
+                                       "bytes":  5628
+                                   },
+                                   {
+                                       "name":  "movement-table.png",
+                                       "sha256":  "7b2366a4d5303e5fee03bde57e4afe38b629e08928c7a28e60319a78ac1c82ae",
+                                       "bytes":  3804
+                                   }
+                               ],
+                     "progress":  {
+                                      "step":  3,
+                                      "total":  3
+                                  },
+                     "generatorStages":  [
+                                             {
+                                                 "stage":  "input",
+                                                 "status":  "reused"
+                                             },
+                                             {
+                                                 "stage":  "guide",
+                                                 "status":  "reused"
+                                             },
+                                             {
+                                                 "stage":  "guide_validation",
+                                                 "status":  "reused"
+                                             },
+                                             {
+                                                 "stage":  "guide_render",
+                                                 "status":  "reused"
+                                             },
+                                             {
+                                                 "stage":  "comparison",
+                                                 "status":  "reused"
+                                             },
+                                             {
+                                                 "stage":  "comparison_validation",
+                                                 "status":  "reused"
+                                             },
+                                             {
+                                                 "stage":  "comparison_render",
+                                                 "status":  "reused"
+                                             },
+                                             {
+                                                 "stage":  "movement_table",
+                                                 "status":  "reused"
+                                             },
+                                             {
+                                                 "stage":  "presentation_text",
+                                                 "status":  "reused"
+                                             },
+                                             {
+                                                 "stage":  "preview",
+                                                 "status":  "reused"
+                                             }
+                                         ]
+                 }
+             ],
+    "recordedStates":  [
+                           "validating_sources",
+                           "generating",
+                           "validating_outputs",
+                           "awaiting_visual_review",
+                           "validating_sources",
+                           "generating",
+                           "validating_outputs",
+                           "awaiting_visual_review",
+                           "validating_sources",
+                           "generating",
+                           "validating_outputs",
+                           "awaiting_visual_review"
+                       ]
+}

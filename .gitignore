@@ -10,3 +10,8 @@ dist/
 native-auth.js
 *.p12
 *.dpapi
+
+# Isolated local test artefacts are not source or deployable clinical packages.
+.runtime/
+__pycache__/
+*.pyc

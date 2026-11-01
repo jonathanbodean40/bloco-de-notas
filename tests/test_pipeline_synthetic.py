@@ -118,17 +118,31 @@ class SyntheticPipelineTests(unittest.TestCase):
         self.assertFalse(report["clinicalDataConfirmed"])
         self.assertFalse(report["contactsVisuallyVerified"])
 
-    def test_fake_generator_can_only_reach_review_state(self):
+    def test_zero_exit_without_artifacts_is_blocked(self):
         self.prepare()
         result, fake = self.run_with_fake_generator()
-        self.assertEqual(result["state"], "awaiting_visual_review")
+        self.assertEqual(result["state"], "blocked")
+        self.assertFalse(result["clinicalApproval"])
+        self.assertFalse(result["publishingAuthorized"])
         fake.assert_called_once()
         args = fake.call_args.args[0]
-        self.assertIn("--no-render", args)
+        self.assertNotIn("--no-render", args)
         self.assertNotIn("publish", args)
         self.assertNotIn("archive-new", args)
         self.assertTrue((agent.RESULTS / ("a" * 32 + ".json")).is_file())
         self.assertFalse((agent.INBOX / ("a" * 32 + ".json")).exists())
+
+    def test_native_rollout_blocks_non_synthetic_case(self):
+        self.prepare()
+        for marker in (False, None, "true", 1):
+            with self.subTest(marker=marker):
+                (self.cases / (self.reference + ".json")).write_text(
+                    json.dumps({"synthetic_only": marker}), encoding="utf-8")
+                result, fake = self.run_with_fake_generator()
+                self.assertEqual(result["state"], "awaiting_integration_validation")
+                self.assertFalse(result["clinicalApproval"])
+                self.assertFalse(result["publishingAuthorized"])
+                fake.assert_not_called()
 
     def test_wrong_request_version_stops_before_generator(self):
         self.prepare()

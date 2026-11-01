@@ -93,8 +93,17 @@ def _verified_file(root: Path, record: dict, label: str, image: bool) -> tuple[i
         # A hash alone would accept a zero-byte or unreadable CSV as evidence.
         # Validate only the header; clinical values remain unexamined.
         try:
-            with path.open("r", encoding="utf-8-sig", newline="") as stream:
-                header = next(csv.reader(stream, strict=True), None)
+            with path.open("rb") as probe:
+                prefix = probe.read(4)
+            if prefix.startswith((b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff")):
+                raise PreflightError(f"{label}: codificação CSV não suportada")
+            encoding = "utf-16" if prefix.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
+            with path.open("r", encoding=encoding, newline="") as stream:
+                first_line = stream.readline(65537)
+                if len(first_line) > 65536:
+                    raise PreflightError(f"{label}: cabeçalho CSV demasiado grande")
+                delimiter = "\t" if "\t" in first_line else ","
+                header = next(csv.reader([first_line], delimiter=delimiter, strict=True), None)
         except (OSError, UnicodeError, csv.Error) as exc:
             raise PreflightError(f"{label}: CSV ilegível") from exc
         if (not header or len(header) > 128

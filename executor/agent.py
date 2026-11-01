@@ -17,6 +17,7 @@ from pathlib import Path
 GENERATOR = Path.home() / "Dropbox" / "1_KEEP ALIGNER PORTUGAL" / "FLUXO DE TRABALHO KEEP ALIGNER" / "GERADOR KEEP ALIGNER"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "KeepAligner" / "LocalAgent"
 INBOX, CASES, RESULTS = (ROOT / name for name in ("inbox", "cases", "results"))
+GENERATOR_JOBS = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "KEEP ALIGNER GENERATOR" / "jobs"
 VALID_MODES = {"guide", "presentation"}
 VALID_STATUSES = {"unknown", "review", "approved"}
 VALID_KINDS = {"unknown", "new", "modified", "refinement"}
@@ -126,8 +127,16 @@ def process_job(path: Path) -> dict:
     result = dict(id=ticket, request=request, createdAt=job.get("createdAt", ""),
                   finishedAt=datetime.now(timezone.utc).isoformat(),
                   state="awaiting_case_data", message="Falta ficha estruturada e confirmada do caso; não foi criada guia clínica.")
+    result.update(clinicalApproval=False, publishingAuthorized=False,
+                  requiresVisualReview=True, requiresClinicalReview=True)
+    def progress(state: str, step: int, message: str) -> None:
+        result.update(state=state, message=message, progress={"step": step, "total": 3},
+                      updatedAt=datetime.now(timezone.utc).isoformat())
+        result.pop("finishedAt", None)
+        save_json(RESULTS / (ticket + ".json"), result)
     data = case_file(request["reference"])
     if data is not None:
+        progress("validating_sources", 1, "A conferir as fontes preparadas e a versão do plano.")
         if not staged_sources_ready(request["reference"], request):
             result["state"] = "awaiting_verified_sources"
             result["message"] = (
@@ -139,11 +148,21 @@ def process_job(path: Path) -> dict:
             path.unlink()
             return result
         try:
+            # This rollout is deliberately limited to explicit synthetic fixtures.
+            # Live source-to-case binding and provider acceptance are not yet validated.
+            if read_json(data).get("synthetic_only") is not True:
+                result["state"] = "awaiting_integration_validation"
+                result["message"] = "Integração nativa em ensaio: casos reais bloqueados até validação das fontes e autorização específica."
+                result["finishedAt"] = datetime.now(timezone.utc).isoformat()
+                save_json(RESULTS / (ticket + ".json"), result)
+                path.unlink()
+                return result
             interpreter, script = python_and_generator()
             # Files created only in the generator's private jobs directory.
             # No archive-new, no publishing, no browser automation.
+            progress("generating", 2, "A gerar os documentos e as prévias nativas; revisão ainda pendente.")
             command = [str(interpreter), str(script), "run", "--case",
-                       str(data.resolve()), "--mode", request["mode"], "--no-render"]
+                       str(data.resolve()), "--mode", request["mode"]]
             reply = subprocess.run(command, cwd=str(GENERATOR), timeout=300,
                                    capture_output=True, text=True, encoding="utf-8",
                                    errors="replace", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
@@ -151,8 +170,14 @@ def process_job(path: Path) -> dict:
             result["stdoutTail"] = reply.stdout[-3500:]
             result["stderrTail"] = reply.stderr[-2500:]
             if reply.returncode == 0:
+                from output_validation import verify_outputs
+                progress("validating_outputs", 3, "A verificar documentos, prévias e recibos do gerador.")
+                result["artifactReport"] = verify_outputs(reply.stdout, GENERATOR_JOBS, data, request)
                 result["state"] = "awaiting_visual_review"
-                result["message"] = "Guia/PPTX técnico preparado; exige revisão visual e clínica antes de arquivar."
+                result["message"] = (
+                    "Documentos e prévias verificados tecnicamente. "
+                    "Exigem revisão visual e clínica humana; publicação não autorizada."
+                )
             else:
                 result["state"] = "blocked"
                 result["message"] = "O gerador bloqueou o caso; verificar validações sem publicar."

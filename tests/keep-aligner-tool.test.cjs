@@ -176,7 +176,10 @@ async function run() {
     assert.ok(cacheVersion && assetNames.length>=12,'Manifesto de cache inválido');
     await op.evaluate(async()=>{
       await navigator.serviceWorker.register('/service-worker.js');
-      await navigator.serviceWorker.ready;
+      await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('Service worker not ready: verify generated cache assets, including native-auth.js')),15000))
+      ]);
     });
     await op.waitForFunction(async({version,length})=>{
       if(!await caches.has(version))return false;

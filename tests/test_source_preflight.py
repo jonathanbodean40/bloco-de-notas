@@ -134,6 +134,22 @@ class PreflightTests(unittest.TestCase):
             "kind": "ipr_csv", "provider": "OnyxCeph", "plan_id": self.plan,
             "path": "sources/ipr.csv", "sha256": self.sha(target)})
 
+    def test_onyx_utf16_bom_tabular_source(self):
+        self.add_csv('Mandible\n[mm]\t48m\t48d\n'.encode('utf-16'))
+        self.assertTrue(self.check()['ok'])
+
+    def test_utf8_tabular_header(self):
+        self.add_csv('Color\tReference\tName\tStep\n'.encode('utf-8'))
+        self.assertTrue(self.check()['ok'])
+
+    def test_utf32_rejected(self):
+        self.add_csv('Mandible\n'.encode('utf-32'))
+        self.assertFalse(self.check()['ok'])
+
+    def test_oversized_header_rejected(self):
+        self.add_csv(b'x' * 65537)
+        self.assertFalse(self.check()['ok'])
+
     def test_valid_utf8_csv_header(self):
         self.add_csv(b"tooth,step,amount\n")
         self.assertTrue(self.check()["ok"])
