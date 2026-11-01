@@ -1,8 +1,9 @@
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import { registerPlugin } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
-const isAndroid = Boolean(window.Capacitor?.isNativePlatform?.());
+const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+if (isAndroid) document.documentElement.classList.add('native-android');
 const NativeShare = registerPlugin('KeepShare');
 let pendingAuthUrl = null;
 let lastDeliveredUrl = null;
