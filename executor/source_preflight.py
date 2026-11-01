@@ -56,7 +56,8 @@ def _local_file(root: Path, rel: object) -> Path:
     if not isinstance(rel, str) or not rel or len(rel) > 240 or '\\' in rel or ':' in rel:
         raise PreflightError("Caminho de fonte inválido")
     sub = PurePosixPath(rel)
-    if sub.is_absolute() or any(part in ("..", ".", "") for part in sub.parts):
+    if (sub.as_posix() != rel or sub.is_absolute()
+            or any(part in ("..", ".", "") for part in sub.parts)):
         raise PreflightError("Fonte fora da área autorizada")
     candidate = root.joinpath(*sub.parts)
     if any(part.is_symlink() for part in (candidate, *candidate.parents)):
