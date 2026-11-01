@@ -62,6 +62,24 @@ class PreflightTests(unittest.TestCase):
                      "automaticCollection", "publishingAuthorized"):
             self.assertFalse(result[name])
 
+    def test_identical_capture_bytes_are_flagged_for_review(self):
+        report = self.check()
+        self.assertTrue(report["ok"])
+        self.assertTrue(report["possibleRepeatedCaptures"])
+        self.assertEqual(report["duplicateCaptureHashes"], 7)
+        self.assertTrue(report["requiresVisualReview"])
+        self.assertFalse(report["publishingAuthorized"])
+
+    def test_distinct_capture_bytes_have_no_duplicate_warning(self):
+        for index, capture in enumerate(self.data["captures"]):
+            target = self.root / capture["path"]
+            Image.new("RGB", (960, 540), (index * 27, 80, 160)).save(target)
+            capture["sha256"] = self.sha(target)
+        report = self.check()
+        self.assertTrue(report["ok"], report["errors"])
+        self.assertFalse(report["possibleRepeatedCaptures"])
+        self.assertEqual(report["duplicateCaptureHashes"], 0)
+
     def test_wrong_plan(self):
         self.data["captures"][0]["plan_id"] = "PREVIOUS-VERSION"
         self.assertFalse(self.check()["ok"])

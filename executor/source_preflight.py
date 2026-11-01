@@ -120,6 +120,7 @@ def inspect_manifest(path: Path) -> dict:
     path = Path(path)
     result = {
         "ok": False, "captureCount": 0, "sourceCount": 0,
+        "duplicateCaptureHashes": 0, "possibleRepeatedCaptures": False,
         "requiresVisualReview": True, "requiresClinicalReview": True,
         "contactsVisuallyVerified": False, "clinicalDataConfirmed": False,
         "automaticCollection": False, "publishingAuthorized": False, "errors": [],
@@ -169,6 +170,7 @@ def inspect_manifest(path: Path) -> dict:
         if mode == "full_presentation" and "movement_table" not in source_seen:
             raise PreflightError("Tabela de movimentos obrigatória")
         seen = set()
+        capture_hashes = set()
         dimensions = {}
         for index, record in enumerate(captures, 1):
             label = f"Captura {index}"
@@ -191,6 +193,11 @@ def inspect_manifest(path: Path) -> dict:
             if not _nonempty(record.get("orientation_ref")) or not _nonempty(record.get("scale_ref")):
                 raise PreflightError(f"{label}: orientação/escala sem referência")
             dimensions[key] = _verified_file(root, record, label, image=True)
+            fingerprint = record["sha256"]
+            if fingerprint in capture_hashes:
+                result["duplicateCaptureHashes"] += 1
+                result["possibleRepeatedCaptures"] = True
+            capture_hashes.add(fingerprint)
             result["captureCount"] += 1
         for view in VIEWS if mode == "full_presentation" else ():
             before = next(item for item in captures
