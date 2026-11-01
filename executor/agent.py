@@ -142,6 +142,32 @@ def process_pending() -> list[dict]:
     return outputs
 
 
+def count_json_files(directory: Path) -> int | None:
+    """Read directory metadata only: never open case or result contents."""
+    try:
+        return sum(1 for entry in directory.iterdir()
+                   if entry.is_file() and entry.suffix == ".json")
+    except FileNotFoundError:
+        return 0
+    except OSError:
+        return None
+
+
+def worker_health() -> dict:
+    """A fresh heartbeat is evidence of activity, not proof a case succeeded."""
+    try:
+        heartbeat = read_json(ROOT / "heartbeat.json", max_bytes=16_384)
+        stamp = str(heartbeat["timestamp"])
+        last = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - last.astimezone(timezone.utc)).total_seconds()
+        online = heartbeat.get("state") == "running" and 0 <= age <= 60
+        return {"workerOnline": online, "workerLastSeenAt": stamp,
+                "workerHeartbeatAgeSeconds": round(age) if 0 <= age < 1e7 else None}
+    except (OSError, ValueError, TypeError, KeyError, OverflowError):
+        return {"workerOnline": False, "workerLastSeenAt": None,
+                "workerHeartbeatAgeSeconds": None}
+
+
 def health() -> dict:
     try:
         interpreter, script = python_and_generator()
@@ -151,9 +177,12 @@ def health() -> dict:
         interpreter = script = None
         python_ok = False
     codex = Path(os.environ.get("APPDATA", "")) / "npm" / "codex.cmd"
+    worker = worker_health()
     return {"codexInstalled": codex.is_file(), "generatorInstalled": bool(script),
             "pythonReady": python_ok, "inbox": str(INBOX),
-            "status": "ready" if python_ok else "needs_attention",
+            "queueDepth": count_json_files(INBOX),
+            "resultCount": count_json_files(RESULTS),
+            **worker, "status": "ready" if python_ok and worker["workerOnline"] else "needs_attention",
             "publishingEnabled": False, "automaticCodexCalls": False}
 
 
