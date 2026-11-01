@@ -861,6 +861,56 @@
     const key=e.key.toLowerCase();if((e.ctrlKey||e.metaKey)&&key==='s'){e.preventDefault();saveNote(active);}
     if((e.ctrlKey||e.metaKey)&&(key==='z'||key==='y')){e.preventDefault();undo(active,key==='y'||e.shiftKey?1:-1);}
   });
+  // Capacitor Android system Back: dismiss transient UI, return from a note
+  // to the list, then let the native bridge exit to the Android launcher.
+  addEventListener('notas:android-back', event => {
+    if(!document.documentElement.classList.contains('native-android'))return;
+    const dialogs=[...document.querySelectorAll('dialog[open]')];
+    if(dialogs.length){
+      dialogs[dialogs.length-1].close();
+      event.preventDefault();
+      return;
+    }
+    if(!menu.hidden){
+      closeMenu();
+      event.preventDefault();
+      return;
+    }
+    if(detached){
+      event.preventDefault();
+      if(active){
+        // Android Back should never silently discard edits.
+        if(active.dirty && !saveNote(active)){
+          status.textContent='Não foi possível guardar a nota. O editor permanece aberto.';
+          return;
+        }
+        closeNote(active);
+      }else{
+        const url=new URL(location.href);
+        url.search='';url.hash='';
+        location.assign(url.href);
+      }
+      return;
+    }
+    if(windows.size && !$('#sidebar').classList.contains('active')){
+      event.preventDefault();
+      if(active){
+        if(active.dirty && !saveNote(active)){
+          status.textContent='Não foi possível guardar a nota. O editor permanece aberto.';
+          return;
+        }
+        closeNote(active);
+      }else openSidebar();
+      return;
+    }
+    if(localSaveFailed||[...windows.values()].some(w=>w.dirty)){
+      event.preventDefault();
+      status.textContent='Existem alterações por guardar. Guarde-as antes de sair.';
+      return;
+    }
+    saveWorkspace();
+    // Not prevented: native App.exitApp() handles the Android Home/Back action.
+  });
   addEventListener('pagehide',saveWorkspace);
   addEventListener('beforeunload',e=>{if(!privateAccess.reloading&&(localSaveFailed||[...windows.values()].some(w=>w.dirty))){e.preventDefault();e.returnValue='';}});
   let storageTimer;
