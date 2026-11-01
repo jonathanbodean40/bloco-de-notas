@@ -1,6 +1,6 @@
 {
   "name": "bloco-de-notas-pro",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Bloco de Notas Pro — clientes locais independentes do ChatGPT e Dropbox",
   "main": "desktop/main.cjs",
