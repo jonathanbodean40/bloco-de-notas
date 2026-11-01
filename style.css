@@ -169,29 +169,53 @@ body.note-options-open #custom-context-menu{position:fixed;left:auto!important;r
 @media(pointer:coarse){.object-lock{width:36px;height:36px}.text-box>.textbox-body>.textbox-canvas>.textbox-editor{padding-right:36px}}
 
 
-/* Android/HyperOS: preserve touch controls above the system navigation area.
-   Applied only by the Capacitor native bridge, not by the web or Windows app. */
+/* HyperOS / Android 15+: position controls against the real operating-system
+   insets returned by KeepInsets. No extra empty footer below the buttons. */
 html.native-android {
-  --notes-android-bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+  --notes-status-inset: max(var(--notes-system-top, 0px), env(safe-area-inset-top, 0px));
+  --notes-nav-inset: max(var(--notes-system-bottom, 0px), env(safe-area-inset-bottom, 0px));
 }
-html.native-android #app-footer {
-  inset: auto 0 0;
-  height: calc(44px + var(--notes-android-bottom));
-  min-height: calc(44px + var(--notes-android-bottom));
-  padding: 5px 12px calc(5px + var(--notes-android-bottom)) 8px;
-  padding-bottom: calc(5px + var(--notes-android-bottom));
-  align-items: flex-start;
+html.native-android #app-header,
+html.native-android .detached #app-header {
+  height: calc(46px + var(--notes-status-inset));
+  padding-top: calc(15px + var(--notes-status-inset));
 }
 html.native-android #workspace,
 html.native-android .detached #workspace {
-  bottom: calc(44px + var(--notes-android-bottom));
+  top: calc(46px + var(--notes-status-inset));
+  bottom: calc(50px + var(--notes-nav-inset));
+}
+html.native-android #app-footer {
+  inset: auto 0 var(--notes-nav-inset) 0;
+  height: 50px;
+  min-height: 50px;
+  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+}
+html.native-android #app-footer > button {
+  align-self: center;
 }
 html.native-android .sidebar {
-  bottom: calc(44px + var(--notes-android-bottom));
+  top: 0;
+  bottom: calc(50px + var(--notes-nav-inset));
+  padding-top: calc(26px + var(--notes-status-inset));
 }
 html.native-android #new-note-btn {
-  bottom: calc(52px + var(--notes-android-bottom));
+  bottom: calc(58px + var(--notes-nav-inset));
 }
 html.native-android #popup-message {
-  bottom: calc(44px + var(--notes-android-bottom));
+  bottom: calc(60px + var(--notes-nav-inset));
+}
+html.native-android .window-bar [data-window=close] {
+  top: calc(var(--notes-status-inset) + 8px);
+  right: 12px;
+}
+html.native-android #close-sidebar-btn {
+  top: calc(var(--notes-status-inset) + 8px);
+  right: 12px;
+}
+html.native-android .private-access {
+  padding-top: calc(24px + var(--notes-status-inset));
+  padding-bottom: calc(24px + var(--notes-nav-inset));
 }
