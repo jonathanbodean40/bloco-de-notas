@@ -89,6 +89,34 @@ def case_file(reference: str) -> Path | None:
     return file if file.is_file() and not file.is_symlink() else None
 
 
+def staged_sources_ready(reference: str, request: dict) -> bool:
+    """Fail closed before generation; staged evidence is not clinical approval.
+
+    The UI cannot supply a manifest path. Only the case-scoped staged
+    manifest under the private cases directory can satisfy this gate.
+    """
+    if not CODE_PATTERN.fullmatch(reference):
+        return False
+    case_root = CASES / reference
+    manifest = case_root / "manifest.json"
+    if case_root.is_symlink() or manifest.is_symlink() or not manifest.is_file():
+        return False
+    try:
+        from source_preflight import inspect_manifest
+        metadata = read_json(manifest, max_bytes=128 * 1024)
+        expected_type = ("guide" if request["mode"] == "guide"
+                         else "full_presentation")
+        if (not request["version"]
+                or metadata.get("plan_id") != request["version"]
+                or metadata.get("package_type") != expected_type):
+            return False
+        report = inspect_manifest(manifest)
+        # An empty guide manifest must not be treated as evidence.
+        return report["ok"] is True and report["sourceCount"] > 0
+    except (OSError, ValueError, TypeError, KeyError, ImportError):
+        return False
+
+
 def process_job(path: Path) -> dict:
     job = read_json(path)
     ticket = str(job.get("id", ""))
@@ -100,6 +128,16 @@ def process_job(path: Path) -> dict:
                   state="awaiting_case_data", message="Falta ficha estruturada e confirmada do caso; não foi criada guia clínica.")
     data = case_file(request["reference"])
     if data is not None:
+        if not staged_sources_ready(request["reference"], request):
+            result["state"] = "awaiting_verified_sources"
+            result["message"] = (
+                "Fontes/versão do plano sem pré-validação; geração suspensa. "
+                "A revisão visual e clínica continua obrigatória."
+            )
+            result["finishedAt"] = datetime.now(timezone.utc).isoformat()
+            save_json(RESULTS / (ticket + ".json"), result)
+            path.unlink()
+            return result
         try:
             interpreter, script = python_and_generator()
             # Files created only in the generator's private jobs directory.
