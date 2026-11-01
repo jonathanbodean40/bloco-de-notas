@@ -5,6 +5,12 @@ import { Clipboard } from '@capacitor/clipboard';
 const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 if (isAndroid) {
   document.documentElement.classList.add('native-android');
+  void syncSystemInsets();
+  window.addEventListener('resize', () => void syncSystemInsets(), {passive: true});
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void syncSystemInsets();
+  });
+
   // WebView assets are bundled in the APK. Purge only stale static web caches,
   // never localStorage or application notes.
   if (typeof caches !== 'undefined') {
@@ -12,6 +18,21 @@ if (isAndroid) {
   }
 }
 const NativeShare = registerPlugin('KeepShare');
+const NativeInsets = registerPlugin('KeepInsets');
+async function syncSystemInsets() {
+  if (!isAndroid) return;
+  try {
+    const data = await NativeInsets.getInsets();
+    for (const edge of ['top', 'bottom']) {
+      const value = Number(data?.[edge]);
+      if (!Number.isFinite(value) || value < 0 || value > 96) continue;
+      document.documentElement.style.setProperty('--notes-system-' + edge, value + 'px');
+    }
+  } catch {
+    // Older/native preview builds can use CSS env(safe-area-inset-*) fallback.
+  }
+}
+
 let pendingAuthUrl = null;
 let lastDeliveredUrl = null;
 function handleAppUrl(url) {
