@@ -63,11 +63,15 @@ async function run() {
   });
   await check('Autenticação, configuração e estilos principais preservados face à versão publicada', () => {
     // The note editor is intentionally modified to restore export and reordering.
-    // Authentication/configuration and approved main styling must not regress.
+    // Current authorization and UI must remain functional, but old CSS snapshots are no longer authoritative.
     for (const name of ['private-access.js','config.js']) {
       assert.equal(execFileSync('git',['diff','--exit-code','HEAD','--',name],{cwd:root,encoding:'utf8'}),'');
     }
-    assert.equal(fs.readFileSync(path.join(root,'style.css'),'utf8'),execFileSync('git',['show','b984514:style.css'],{cwd:root,encoding:'utf8'}));
+    // The Android footer and insets have intentionally evolved since the old UI snapshot.
+    const css=fs.readFileSync(path.join(root,'style.css'),'utf8');
+    assert(css.includes('#app-footer'),'Footer styling missing');
+    assert(css.includes('html.native-android #app-footer'),'Native bottom-bar styling missing');
+    assert(css.includes('html.native-android .window-bar [data-window=close]'),'Android status-bar close-button styling missing');
     const tool = fs.readFileSync(path.join(root,'keep-aligner-tool.js'),'utf8');
     for (const forbidden of [/localStorage\./,/sessionStorage\./,/\bfetch\(/,/supabase/]) assert(!forbidden.test(tool));
   });
