@@ -20,3 +20,12 @@ O `executor/agent.py` só avança para o gerador, quando existir uma ficha previ
 Um pedido sem manifesto válido recebe o estado `awaiting_verified_sources`, sem chamar o gerador. O manifesto e o campo de versão não substituem a confirmação da identidade do paciente nem uma autorização clínica. A validação é **offline**, usando material já exportado; não lê automaticamente My Keep, Hirsch ou Onyx e não verifica valores clínicos. Ainda não se deve usar este código como produção: o worker instalado é anterior a esta alteração, e um futuro instalador terá de distribuir **ambos** `agent.py` e `source_preflight.py` de forma controlada e testada. Não alterar a aplicação ou os dados do utilizador por causa deste protótipo.
 
 Testes com fontes sintéticas: `python -m unittest discover -s tests -p 'test_*.py' -v`. O ficheiro `test_agent_source_gate.py` utiliza sempre diretórios temporários e injeta um gerador fictício quando necessário. Não executa o gerador real nem altera a fila clínica. No MSI, 8 testes da porta de segurança foram executados com 7 sucessos e 1 omitido por falta de permissão para ligações simbólicas; a verificação de sintaxe Python passou. A execução do GitHub Actions deve ser observada separadamente após os commits.
+
+## Robustez da proveniência (01/11/2026 — desenvolvimento)
+
+O validador da versão de manifesto `schema_version: 1` agora rejeita:
+- propriedades não previstas no manifesto, nas fontes e nas capturas (incluindo dados de sessões ou credenciais);
+- chaves JSON repetidas, que tornariam ambígua a interpretação da versão;
+- utilização do mesmo caminho relativo por mais de uma fonte/captura, incluindo diferenças apenas de maiúsculas/minúsculas em Windows.
+
+Essas verificações não demonstram que duas imagens diferentes sejam visualmente corretas. Dois ficheiros distintos podem conter o mesmo desenho; o SHA-256 prova a integridade dos bytes, não a identidade nem a qualidade da informação clínica. A revisão visual e clínica permanece obrigatória. A alteração está apenas no ramo de desenvolvimento; não instalar nem sincronizar automaticamente com o worker em produção sem teste de compatibilidade e revisão humana.
