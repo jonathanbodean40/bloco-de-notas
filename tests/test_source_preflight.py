@@ -109,6 +109,29 @@ class PreflightTests(unittest.TestCase):
         self.data["sources"] = []
         self.assertFalse(self.check()["ok"])
 
+    def add_csv(self, contents):
+        target = self.assets / "ipr.csv"
+        target.write_bytes(contents)
+        self.data["sources"].append({
+            "kind": "ipr_csv", "provider": "OnyxCeph", "plan_id": self.plan,
+            "path": "sources/ipr.csv", "sha256": self.sha(target)})
+
+    def test_valid_utf8_csv_header(self):
+        self.add_csv(b"tooth,step,amount\n")
+        self.assertTrue(self.check()["ok"])
+
+    def test_empty_csv_is_not_evidence(self):
+        self.add_csv(b"")
+        self.assertFalse(self.check()["ok"])
+
+    def test_unreadable_csv_header(self):
+        self.add_csv(b"column,\xff\xfe\n")
+        self.assertFalse(self.check()["ok"])
+
+    def test_blank_csv_header(self):
+        self.add_csv(b",,\n")
+        self.assertFalse(self.check()["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()
