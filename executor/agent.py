@@ -157,6 +157,35 @@ def health() -> dict:
             "publishingEnabled": False, "automaticCodexCalls": False}
 
 
+def serve_forever(interval: int) -> None:
+    # A per-user singleton prevents two logon tasks from racing over the inbox.
+    import msvcrt
+    ROOT.mkdir(parents=True, exist_ok=True)
+    lock = (ROOT / "worker.lock").open("a+b")
+    lock.seek(0)
+    try:
+        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        return
+    try:
+        while True:
+            try:
+                process_pending()
+                save_json(ROOT / "heartbeat.json", {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "state": "running",
+                    "pid": os.getpid()
+                })
+            except Exception as error:
+                save_json(ROOT / "last-error.json", {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "message": str(error)[:500]
+                })
+            time.sleep(interval)
+    finally:
+        lock.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Executor local KEEP ALIGNER, sem publicação")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -175,12 +204,8 @@ def main() -> int:
         elif args.command == "once":
             print(json.dumps(process_pending(), ensure_ascii=False))
         elif args.command == "serve":
-            # Single-instance via a named Windows mutex is handled by the
-            # logon launcher, not by accepting arbitrary network requests.
             interval = max(3, min(args.interval, 60))
-            while True:
-                process_pending()
-                time.sleep(interval)
+            serve_forever(interval)
         return 0
     except Exception as error:
         print(type(error).__name__ + ": " + str(error), file=sys.stderr)
