@@ -53,6 +53,7 @@ const {start}=require('./support/keep-aligner-preview.cjs');
    await page.locator('#sidebar.active').waitFor();
 
    await page.goto(base+'/?note=keep-demo-note&scope=keep-tool-demo');
+   await page.evaluate(()=>document.documentElement.classList.add('native-android'));
    const dirtyEditor=page.locator('.note-editor');
    await dirtyEditor.waitFor();
    await dirtyEditor.fill('Rascunho fictício guardado com o botão Voltar.');
