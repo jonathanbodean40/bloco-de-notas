@@ -123,6 +123,28 @@ class OutputValidationTests(unittest.TestCase):
         self.save()
         with self.assertRaises(PreflightError): self.check()
 
+    def set_exports(self, exports):
+        native = self.job / "guide-native.json"
+        self.write(native, {"nativePowerPoint": True, "slides": 2, "overflows": [], "exports": exports})
+        self.receipt["outputs"][native.name] = _hash(native)
+        self.save()
+
+    def test_absolute_aliases_resolve_to_same_verified_exports(self):
+        self.set_exports([str(self.job) + "/./guide-" + str(i) + ".png" for i in (1, 2)])
+        self.assertTrue(self.check()["verified"])
+
+    def test_relative_native_exports_rejected(self):
+        self.set_exports(["guide-1.png", "guide-2.png"])
+        with self.assertRaises(PreflightError): self.check()
+
+    def test_wrong_native_export_order_rejected(self):
+        self.set_exports([str(self.job / f"guide-{i}.png") for i in (2, 1)])
+        with self.assertRaises(PreflightError): self.check()
+
+    def test_native_exports_must_be_a_list(self):
+        self.set_exports({"first": str(self.job / "guide-1.png")})
+        with self.assertRaises(PreflightError): self.check()
+
     def test_missing_preview_rejected(self):
         (self.job / "PREVIA.html").unlink()
         with self.assertRaises(PreflightError): self.check()

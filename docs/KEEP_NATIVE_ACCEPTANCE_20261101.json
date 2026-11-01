@@ -1,5 +1,5 @@
 {
-    "recordedAtUtc":  "2026-11-01T23:47:39.7928405Z",
+    "recordedAtUtc":  "2026-11-01T23:51:19.4072623Z",
     "syntheticOnly":  true,
     "nativeAcceptancePassed":  true,
     "resumeVerified":  true,
@@ -22,7 +22,7 @@
                      "files":  [
                                    {
                                        "name":  "GUIA.pptx",
-                                       "sha256":  "f48233dddfe5c2ed79e71ef122e13f33d871c29b4c91435e7bf10bbfa1bc5b72",
+                                       "sha256":  "fc25c9b04117a5204b69129ed6487c68bc00ebea415936e91c5a8e0aba3a1860",
                                        "bytes":  30953
                                    },
                                    {
@@ -37,7 +37,7 @@
                                    },
                                    {
                                        "name":  "guide-native.json",
-                                       "sha256":  "89d46277c1d01cf543f3381691187924031ffd24f7c3fcd80a90b51451da5d9f",
+                                       "sha256":  "f9a5cb1235de6c898a39868fde561b1c534c5552343fd3c849c6552b4a1ef835",
                                        "bytes":  5614
                                    }
                                ],
@@ -59,17 +59,17 @@
                                              {
                                                  "stage":  "guide_validation",
                                                  "status":  "built",
-                                                 "seconds":  0.031
+                                                 "seconds":  0.016
                                              },
                                              {
                                                  "stage":  "guide_render",
                                                  "status":  "built",
-                                                 "seconds":  1.375
+                                                 "seconds":  1.625
                                              },
                                              {
                                                  "stage":  "preview",
                                                  "status":  "built",
-                                                 "seconds":  0.031
+                                                 "seconds":  0.0
                                              }
                                          ]
                  },
@@ -82,12 +82,12 @@
                      "files":  [
                                    {
                                        "name":  "ANTES E DEPOIS.pptx",
-                                       "sha256":  "eaa8dc6b7c54ed6c08e7d3bb7527be7feff37640498292735ac8793f4322b34d",
+                                       "sha256":  "67023eaaade19a16fe4963eafefc3b19b0cde120d48ec72cd84af9d9c4cd64a3",
                                        "bytes":  56117
                                    },
                                    {
                                        "name":  "GUIA.pptx",
-                                       "sha256":  "f48233dddfe5c2ed79e71ef122e13f33d871c29b4c91435e7bf10bbfa1bc5b72",
+                                       "sha256":  "fc25c9b04117a5204b69129ed6487c68bc00ebea415936e91c5a8e0aba3a1860",
                                        "bytes":  30953
                                    },
                                    {
@@ -102,7 +102,7 @@
                                    },
                                    {
                                        "name":  "comparison-native.json",
-                                       "sha256":  "3067355a407cab7dbe2d0c876616a848406af8d5e5c2331d808ae4282aa9ad72",
+                                       "sha256":  "13ff43bb007378cd51bbeecb9f5c025caf1defe039bddf74bac91e0722122e1e",
                                        "bytes":  1770
                                    },
                                    {
@@ -117,7 +117,7 @@
                                    },
                                    {
                                        "name":  "guide-native.json",
-                                       "sha256":  "0356c2cb93fc7cb227abcd9b12f260f7a14c034ca0c4e7053de239ff37f37f0f",
+                                       "sha256":  "1f777c41f17d20dbe67636a66ee9eb9e7364069f183c7cf07b50f6078a448cde",
                                        "bytes":  5628
                                    },
                                    {
@@ -134,37 +134,37 @@
                                              {
                                                  "stage":  "input",
                                                  "status":  "built",
-                                                 "seconds":  0.016
+                                                 "seconds":  0.032
                                              },
                                              {
                                                  "stage":  "guide",
                                                  "status":  "built",
-                                                 "seconds":  0.015
+                                                 "seconds":  0.031
                                              },
                                              {
                                                  "stage":  "guide_validation",
                                                  "status":  "built",
-                                                 "seconds":  0.016
+                                                 "seconds":  0.015
                                              },
                                              {
                                                  "stage":  "guide_render",
                                                  "status":  "built",
-                                                 "seconds":  1.328
+                                                 "seconds":  1.329
                                              },
                                              {
                                                  "stage":  "comparison",
                                                  "status":  "built",
-                                                 "seconds":  0.063
+                                                 "seconds":  0.093
                                              },
                                              {
                                                  "stage":  "comparison_validation",
                                                  "status":  "built",
-                                                 "seconds":  0.047
+                                                 "seconds":  0.032
                                              },
                                              {
                                                  "stage":  "comparison_render",
                                                  "status":  "built",
-                                                 "seconds":  3.578
+                                                 "seconds":  1.516
                                              },
                                              {
                                                  "stage":  "movement_table",
@@ -174,12 +174,12 @@
                                              {
                                                  "stage":  "presentation_text",
                                                  "status":  "built",
-                                                 "seconds":  0.0
+                                                 "seconds":  0.031
                                              },
                                              {
                                                  "stage":  "preview",
                                                  "status":  "built",
-                                                 "seconds":  0.0
+                                                 "seconds":  0.016
                                              }
                                          ]
                  },
@@ -192,12 +192,12 @@
                      "files":  [
                                    {
                                        "name":  "ANTES E DEPOIS.pptx",
-                                       "sha256":  "eaa8dc6b7c54ed6c08e7d3bb7527be7feff37640498292735ac8793f4322b34d",
+                                       "sha256":  "67023eaaade19a16fe4963eafefc3b19b0cde120d48ec72cd84af9d9c4cd64a3",
                                        "bytes":  56117
                                    },
                                    {
                                        "name":  "GUIA.pptx",
-                                       "sha256":  "f48233dddfe5c2ed79e71ef122e13f33d871c29b4c91435e7bf10bbfa1bc5b72",
+                                       "sha256":  "fc25c9b04117a5204b69129ed6487c68bc00ebea415936e91c5a8e0aba3a1860",
                                        "bytes":  30953
                                    },
                                    {
@@ -212,7 +212,7 @@
                                    },
                                    {
                                        "name":  "comparison-native.json",
-                                       "sha256":  "3067355a407cab7dbe2d0c876616a848406af8d5e5c2331d808ae4282aa9ad72",
+                                       "sha256":  "13ff43bb007378cd51bbeecb9f5c025caf1defe039bddf74bac91e0722122e1e",
                                        "bytes":  1770
                                    },
                                    {
@@ -227,7 +227,7 @@
                                    },
                                    {
                                        "name":  "guide-native.json",
-                                       "sha256":  "0356c2cb93fc7cb227abcd9b12f260f7a14c034ca0c4e7053de239ff37f37f0f",
+                                       "sha256":  "1f777c41f17d20dbe67636a66ee9eb9e7364069f183c7cf07b50f6078a448cde",
                                        "bytes":  5628
                                    },
                                    {

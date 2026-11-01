@@ -25,7 +25,7 @@ Worktree: `C:\Users\ferna\Documents\KeepAligner_SafeDev_20261101`. Ramo local: `
 
 | Verificação | Resultado |
 | --- | --- |
-| Python | 76 executados: 75 aprovados, 1 omitido |
+| Python | 80 executados: 79 aprovados, 1 omitido |
 | Teste omitido | Ligações simbólicas indisponíveis nesta conta Windows |
 | Estados/progresso Node | Aprovado |
 | Fila/heartbeat isolados | Aprovado |
@@ -39,7 +39,9 @@ Worktree: `C:\Users\ferna\Documents\KeepAligner_SafeDev_20261101`. Ramo local: `
 
 O teste nativo final foi repetido depois dos ajustes finais do verificador PPTX e da restrição explícita a dados fictícios. Evidência resumida: `docs/KEEP_NATIVE_ACCEPTANCE_20261101.json`.
 
-Relatório completo preservado no MSI: `.runtime/keep-mock-acceptance-034icjnl/acceptance-report.json`.
+Relatório completo final preservado no MSI: `.runtime/keep-mock-acceptance-46f8o2xq/acceptance-report.json`.
+
+A primeira execução de CI de 6a3c8c6 revelou uma comparação demasiado estrita da grafia dos caminhos nativos Windows. A correção compara os ficheiros absolutos resolvidos, mantendo rejeição de caminhos relativos, ligações simbólicas, ficheiros trocados e ordem incorreta. Foram acrescentados quatro testes e repetidas as três execuções nativas com sucesso. Os relatórios de ensaios anteriores foram preservados.
 
 Documentos/prévias em `runtime/KEEP ALIGNER GENERATOR/jobs/`, dentro da mesma pasta de ensaio: guia PPTX, comparação PPTX/PNG 3840×2160, PNG das duas páginas da guia, tabela fictícia, texto e prévia HTML. Não são modelos clínicos aprovados.
 

@@ -89,10 +89,21 @@ def verify_outputs(stdout: str, jobs_root: Path, case_path: Path, request: dict)
             continue
         native = read_object(_local_file(job, prefix + "-native.json"))
         expected_exports = [job / (prefix + "-" + str(i) + ".png") for i in range(1, count + 1)]
+        exports = native.get("exports")
         if (native.get("nativePowerPoint") is not True or native.get("overflows") != []
-                or native.get("slides") != count
-                or native.get("exports") != [str(p) for p in expected_exports]):
+                or native.get("slides") != count or not isinstance(exports, list)
+                or len(exports) != count):
             raise PreflightError("Renderização nativa incompleta ou com texto excedido")
+        # Windows temporary directories may use an 8.3 alias (RUNNER~1).
+        # Compare the exact resolved files, not the spelling of an absolute path.
+        for value, expected_path in zip(exports, expected_exports):
+            if not isinstance(value, str) or not Path(value).is_absolute():
+                raise PreflightError("Referência de exportação nativa inválida")
+            candidate = Path(value)
+            if any(part.is_symlink() for part in (candidate, *candidate.parents)):
+                raise PreflightError("Exportação nativa redirecionada")
+            if candidate.resolve(strict=True) != expected_path.resolve(strict=True):
+                raise PreflightError("Exportação nativa diferente do ficheiro verificado")
     for filename in ("guide-validation.json",) + (("comparison-validation.json",) if request["mode"] == "presentation" else ()):
         validation = read_object(_local_file(job, filename))
         if validation.get("ok") is not True or validation.get("errors") != []:
