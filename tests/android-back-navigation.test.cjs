@@ -10,7 +10,7 @@ const {start}=require('./support/keep-aligner-preview.cjs');
  let browser;
  try{
    browser=await chromium.launch({channel:'chrome',headless:true});
-   const context=await browser.newContext({viewport:{width:393,height:852},isMobile:true,hasTouch:true});
+   const context=await browser.newContext({viewport:{width:393,height:852},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 16; POCO F8 Ultra) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36'});
    const base='http://127.0.0.1:'+server.address().port;
    const bootstrap=fs.readFileSync(path.join(__dirname,'support/keep-aligner-preview-bootstrap.js'),'utf8');
    await context.route('**/*',route=>{
