@@ -3,7 +3,14 @@ import { Browser } from '@capacitor/browser';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Clipboard } from '@capacitor/clipboard';
 const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
-if (isAndroid) document.documentElement.classList.add('native-android');
+if (isAndroid) {
+  document.documentElement.classList.add('native-android');
+  // WebView assets are bundled in the APK. Purge only stale static web caches,
+  // never localStorage or application notes.
+  if (typeof caches !== 'undefined') {
+    caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('notas-pro-')).map(k => caches.delete(k)))).catch(() => {});
+  }
+}
 const NativeShare = registerPlugin('KeepShare');
 let pendingAuthUrl = null;
 let lastDeliveredUrl = null;
