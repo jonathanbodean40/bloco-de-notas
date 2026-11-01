@@ -172,7 +172,7 @@ body.note-options-open #custom-context-menu{position:fixed;left:auto!important;r
 /* Android/HyperOS: preserve touch controls above the system navigation area.
    Applied only by the Capacitor native bridge, not by the web or Windows app. */
 html.native-android {
-  --notes-android-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  --notes-android-bottom: calc(36px + env(safe-area-inset-bottom, 0px));
 }
 html.native-android #app-footer {
   inset: auto 0 0;
