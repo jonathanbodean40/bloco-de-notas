@@ -45,11 +45,15 @@
   let copying = false, revision = 0;
   const buttons = ['ka-copy-guide', 'ka-copy-presentation'].map(id => doc.getElementById(id));
   const buttonLabels = buttons.map(button => button.textContent);
+  // The last ticket lives only in memory, not in notes or persistent storage.
+  let lastLocalTicket = null, localStatusButton = null;
   const resetButtonLabels = () => buttons.forEach((button, index) => { button.textContent = buttonLabels[index]; });
   const shell = doc.getElementById('private-app');
   const unlocked = () => !!shell && !shell.hidden && !shell.inert && !doc.body.classList.contains('private-locked');
   const clearPrivateFields = () => {
     revision++;
+    lastLocalTicket = null;
+    if (localStatusButton) localStatusButton.hidden = true;
     if (dialog.open) dialog.close();
     form.reset();
     output.value = '';
@@ -71,6 +75,8 @@
   form.addEventListener('submit', event => event.preventDefault());
   form.addEventListener('input', () => {
     revision++;
+    lastLocalTicket = null;
+    if (localStatusButton) localStatusButton.hidden = true;
     result.hidden = true;
     output.value = '';
     resetButtonLabels();
@@ -127,6 +133,32 @@
   // workflow until a separate authenticated remote transport is installed.
   if (typeof root.NOTAS_DESKTOP?.queueKeepJob === 'function') {
     const actions=doc.querySelector('#keep-aligner-dialog .ka-copy-actions');
+    if (typeof root.NOTAS_DESKTOP.keepJobStatus === 'function') {
+      localStatusButton=doc.createElement('button');
+      localStatusButton.type='button';
+      localStatusButton.className='ka-local-status';
+      localStatusButton.textContent='Consultar estado do último pedido';
+      localStatusButton.hidden=true;
+      actions.append(localStatusButton);
+      localStatusButton.addEventListener('click',async()=>{
+        if (!unlocked() || !lastLocalTicket || localStatusButton.disabled) return;
+        const ticket=lastLocalTicket;
+        localStatusButton.disabled=true;
+        try {
+          const current=await root.NOTAS_DESKTOP.keepJobStatus(ticket);
+          if (ticket!==lastLocalTicket || !unlocked()) return;
+          status.dataset.state=current.state==='blocked'?'error':'manual';
+          status.textContent=current.message||(current.state==='queued'
+            ? 'Pedido ainda na fila do MSI; preparação não confirmada.'
+            : 'Estado técnico: '+String(current.state||'indisponível')+'. Revisão clínica obrigatória.');
+        } catch {
+          if (ticket===lastLocalTicket && unlocked()) {
+            status.dataset.state='error';
+            status.textContent='Não foi possível consultar o estado do pedido no MSI.';
+          }
+        } finally { localStatusButton.disabled=false; }
+      });
+    }
     for (const [mode, label] of [
       ['guide','Preparar guia no MSI'],
       ['presentation','Preparar apresentação no MSI']
@@ -146,21 +178,24 @@
           // Reuse the strict prompt validator before crossing the IPC boundary.
           buildPrompt(mode,fields);
           const ticket=await root.NOTAS_DESKTOP.queueKeepJob({mode,...fields});
+          if (!/^[a-f0-9]{32}$/.test(String(ticket?.id||''))) throw new Error('Identificador local inválido');
+          lastLocalTicket=ticket.id;
+          if(localStatusButton) localStatusButton.hidden=false;
           status.textContent='Pedido recebido no MSI. A verificar a ficha estruturada…';
           if(typeof root.NOTAS_DESKTOP.keepJobStatus === 'function'){
             let receivedResult=false;
             for(let retry=0;retry<8;retry++){
               await new Promise(resolve=>root.setTimeout(resolve,850));
               const state=await root.NOTAS_DESKTOP.keepJobStatus(ticket.id);
+              if(ticket.id!==lastLocalTicket || !unlocked())break;
               if(state.state==='queued')continue;
               receivedResult=true;
               // A generated technical draft or missing source is never approval.
-              status.dataset.state=state.state==='blocked'?'error'
-                :state.state==='completed'?'success':'manual';
+              status.dataset.state=state.state==='blocked'?'error':'manual';
               status.textContent=state.message||('Estado: '+state.state);
               break;
             }
-            if(!receivedResult){
+            if(!receivedResult && ticket.id===lastLocalTicket && unlocked()){
               status.dataset.state='manual';
               status.textContent='Pedido ainda na fila do MSI. A geração não foi confirmada.';
             }
