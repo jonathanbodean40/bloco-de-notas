@@ -172,5 +172,14 @@ class PreflightTests(unittest.TestCase):
         self.assertFalse(self.check()["ok"])
 
 
+    def test_rejects_noncanonical_dot_segment(self):
+        self.data["captures"][0]["path"] = "sources/./initial-front.png"
+        self.assertFalse(self.check()["ok"])
+
+    def test_rejects_noncanonical_double_slash(self):
+        self.data["captures"][0]["path"] = "sources//initial-front.png"
+        self.assertFalse(self.check()["ok"])
+
+
 if __name__ == "__main__":
     unittest.main()
