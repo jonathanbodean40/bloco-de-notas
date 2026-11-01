@@ -52,7 +52,7 @@ app.whenReady().then(() => {
     const fields=['reference','planning','version','notes','status','kind'];
     const values=Object.fromEntries(fields.map(key=>[key,typeof input[key]==='string'?input[key].trim():'']));
     if(!['guide','presentation'].includes(input.mode)
-      || !values.reference || values.reference.length>2000 || /[\\x00-\\x1F]/.test(values.reference)
+      || !values.reference || values.reference.length>2000 || [...values.reference].some(ch=>ch.charCodeAt(0)<32)
       || values.planning.length>6000 || (values.planning && !values.planning.startsWith('https://'))
       || values.version.length>160 || values.notes.length>2000
       || !['unknown','review','approved'].includes(values.status)
