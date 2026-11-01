@@ -76,6 +76,17 @@ window.addEventListener('notas:native-auth-ready',()=>{
   if(pendingAuthUrl)window.dispatchEvent(new CustomEvent('notas:auth-url',{detail:{url:pendingAuthUrl}}));
 });
 if(isAndroid){
+  // Register the Android system Back action. Without an explicit handler,
+  // Capacitor may leave the WebView on a stale history entry or not exit.
+  App.addListener('backButton', () => {
+    const request=new Event('notas:android-back', {cancelable:true});
+    window.dispatchEvent(request);
+    if(!request.defaultPrevented){
+      // Home screen: return to Android launcher, preserving the authenticated
+      // local profile; never sign the user out.
+      App.exitApp().catch(() => {});
+    }
+  }).catch(() => {});
   App.addListener('appUrlOpen',event=>handleAppUrl(event.url));
   App.getLaunchUrl().then(event=>{if(event?.url)handleAppUrl(event.url);}).catch(()=>{});
 }
