@@ -403,7 +403,17 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden && currentSession) void validate(); });
   setInterval(() => { if (!document.hidden && currentSession) void validate(); }, 60000);
   // Cache only the application shell; authorization always requires the server.
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').then(reg => reg.update()).catch(() => {});
+  if ('serviceWorker' in navigator) {
+    if (nativePlatform) {
+      // Native APK bundles all application files. A previously installed web service
+      // worker must not serve an older PWA shell after an APK update.
+      navigator.serviceWorker.getRegistrations()
+        .then(registrations => Promise.all(registrations.map(reg => reg.unregister())))
+        .catch(() => {});
+    } else {
+      navigator.serviceWorker.register('./service-worker.js').then(reg => reg.update()).catch(() => {});
+    }
+  }
   if (configured && window.supabase) {
     try { cloud = window.supabase.createClient(config.supabaseUrl, config.supabasePublishableKey,{auth:{flowType:'pkce',detectSessionInUrl:!nativePlatform}}); }
     catch { lock('configuration'); return; }
