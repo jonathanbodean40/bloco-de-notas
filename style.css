@@ -167,3 +167,31 @@ body.note-options-open #custom-context-menu{position:fixed;left:auto!important;r
 .text-box>.textbox-body>.textbox-canvas>.textbox-editor{padding-right:28px}
 .text-box:not(.pinned)>.textbox-body,.text-box:not(.pinned)>.textbox-body>.textbox-canvas{cursor:move}
 @media(pointer:coarse){.object-lock{width:36px;height:36px}.text-box>.textbox-body>.textbox-canvas>.textbox-editor{padding-right:36px}}
+
+
+/* Android/HyperOS: preserve touch controls above the system navigation area.
+   Applied only by the Capacitor native bridge, not by the web or Windows app. */
+html.native-android {
+  --notes-android-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+html.native-android #app-footer {
+  inset: auto 0 0;
+  height: calc(44px + var(--notes-android-bottom));
+  min-height: calc(44px + var(--notes-android-bottom));
+  padding: 5px 12px calc(5px + var(--notes-android-bottom)) 8px;
+  padding-bottom: calc(5px + var(--notes-android-bottom));
+  align-items: flex-start;
+}
+html.native-android #workspace,
+html.native-android .detached #workspace {
+  bottom: calc(44px + var(--notes-android-bottom));
+}
+html.native-android .sidebar {
+  bottom: calc(44px + var(--notes-android-bottom));
+}
+html.native-android #new-note-btn {
+  bottom: calc(52px + var(--notes-android-bottom));
+}
+html.native-android #popup-message {
+  bottom: calc(44px + var(--notes-android-bottom));
+}
