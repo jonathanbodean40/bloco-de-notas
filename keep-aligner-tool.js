@@ -123,4 +123,46 @@
   }
   buttons[0].addEventListener('click', () => copy('guide'));
   buttons[1].addEventListener('click', () => copy('presentation'));
+  // Windows-only local execution queue; Android retains the existing copy
+  // workflow until a separate authenticated remote transport is installed.
+  if (typeof root.NOTAS_DESKTOP?.queueKeepJob === 'function') {
+    const actions=doc.querySelector('#keep-aligner-dialog .ka-copy-actions');
+    for (const [mode, label] of [
+      ['guide','Preparar guia no MSI'],
+      ['presentation','Preparar apresentação no MSI']
+    ]) {
+      const btn=doc.createElement('button');
+      btn.type='button';
+      btn.className='ka-local-submit';
+      btn.textContent=label;
+      actions.append(btn);
+      btn.addEventListener('click',async()=>{
+        if(!unlocked() || !form.reportValidity() || copying || btn.disabled)return;
+        btn.disabled=true;
+        status.dataset.state='';
+        status.textContent='A enviar pedido para o executor local do MSI…';
+        try{
+          const fields=Object.fromEntries(new FormData(form));
+          // Reuse the strict prompt validator before crossing the IPC boundary.
+          buildPrompt(mode,fields);
+          const ticket=await root.NOTAS_DESKTOP.queueKeepJob({mode,...fields});
+          status.textContent='Pedido recebido no MSI. A verificar a ficha estruturada…';
+          if(typeof root.NOTAS_DESKTOP.keepJobStatus === 'function'){
+            for(let retry=0;retry<8;retry++){
+              await new Promise(resolve=>root.setTimeout(resolve,850));
+              const state=await root.NOTAS_DESKTOP.keepJobStatus(ticket.id);
+              if(state.state==='queued')continue;
+              status.dataset.state=state.state==='blocked'?'error':'success';
+              status.textContent=state.message||('Estado: '+state.state);
+              break;
+            }
+          }
+        }catch(error){
+          status.dataset.state='error';
+          status.textContent='Não foi possível enviar ao MSI: '+(error?.message||'erro local');
+        }finally{btn.disabled=false;}
+      });
+    }
+  }
+
 })(typeof window === 'object' ? window : globalThis);
