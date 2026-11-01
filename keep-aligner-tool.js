@@ -148,13 +148,21 @@
           const ticket=await root.NOTAS_DESKTOP.queueKeepJob({mode,...fields});
           status.textContent='Pedido recebido no MSI. A verificar a ficha estruturada…';
           if(typeof root.NOTAS_DESKTOP.keepJobStatus === 'function'){
+            let receivedResult=false;
             for(let retry=0;retry<8;retry++){
               await new Promise(resolve=>root.setTimeout(resolve,850));
               const state=await root.NOTAS_DESKTOP.keepJobStatus(ticket.id);
               if(state.state==='queued')continue;
-              status.dataset.state=state.state==='blocked'?'error':'success';
+              receivedResult=true;
+              // A generated technical draft or missing source is never approval.
+              status.dataset.state=state.state==='blocked'?'error'
+                :state.state==='completed'?'success':'manual';
               status.textContent=state.message||('Estado: '+state.state);
               break;
+            }
+            if(!receivedResult){
+              status.dataset.state='manual';
+              status.textContent='Pedido ainda na fila do MSI. A geração não foi confirmada.';
             }
           }
         }catch(error){
