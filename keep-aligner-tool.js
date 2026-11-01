@@ -16,7 +16,7 @@
       if (!['https:', 'http:'].includes(url.protocol)) throw new Error('O link 3D deve começar por https:// ou http://.');
     }
     const lines = [
-      'Use o Remote Desktop Commander no MSI.',
+      'Use o Keep Remote no MSI.',
       'Leia este manual e siga o procedimento do agente, sem consultar a conversa antiga:',
       `${generator}/MANUAL RAPIDO.md`, '',
       mode === 'guide' ? 'Tarefa: SOMENTE GUIA DE TRATAMENTO KEEP ALIGNER.' : 'Tarefa: APRESENTAÇÃO COMPLETA DO PLANO DE TRATAMENTO KEEP ALIGNER.',
