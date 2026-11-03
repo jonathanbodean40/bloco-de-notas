@@ -16,7 +16,7 @@ if($m.unrelatedResourcesPreserved -ne $true -or $t.passed -ne $true -or $t.produ
 if($t.candidateSha256 -ne $m.candidateSha256){throw 'Test does not correspond to this candidate.'}
 $requiredChecks=@('real_asar_starts_with_isolated_profile','missing_ticket_is_not_found','packaged_ipc_writes_isolated_queue_and_reads_heartbeat','stale_worker_warning','packaged_ipc_python_executor_result_no_clinical_generator')
 foreach($check in $requiredChecks){if($check -notin $t.checks){throw 'Incomplete packaged acceptance.'}}
-$allowed=@('desktop/main.cjs','desktop/preload.cjs','desktop/keep-job-status.cjs','www/keep-aligner-tool.js')
+$allowed=@('desktop/main.cjs','desktop/preload.cjs','desktop/keep-job-status.cjs','desktop/keep-job-preview.cjs','www/keep-aligner-tool.js')
 foreach($file in $m.changedFiles){if($file -notin $allowed){throw 'Unexpected changed resource.'}}
 if(Get-Process -Name 'Bloco de Notas Pro' -ErrorAction SilentlyContinue){throw 'Application is running. Close it normally; do not terminate unsaved work.'}
 $agent=Join-Path $env:LOCALAPPDATA 'KeepAligner\LocalAgent'

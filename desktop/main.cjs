@@ -5,6 +5,8 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { getKeepJobStatus } = require('./keep-job-status.cjs');
+const { getKeepJobPreview } = require('./keep-job-preview.cjs');
+const keepJobsRoot=path.join(process.env.LOCALAPPDATA || app.getPath('home'), 'KEEP ALIGNER GENERATOR', 'jobs');
 const keepAgentRoot=path.join(process.env.LOCALAPPDATA || app.getPath('home'), 'KeepAligner', 'LocalAgent');
 function authorisedWindow(event){
   return Boolean(BrowserWindow.fromWebContents(event.sender) && event.sender.getURL().startsWith('notas://app/'));
@@ -74,6 +76,11 @@ app.whenReady().then(() => {
     if(!authorisedWindow(event) || typeof id!=='string' || !/^[a-f0-9]{32}$/.test(id))
       throw new Error('Pedido não autorizado');
     return getKeepJobStatus(keepAgentRoot, id);
+  });
+  ipcMain.handle('notas:keep-preview', async (event, id) => {
+    if(!authorisedWindow(event) || typeof id!=='string' || !/^[a-f0-9]{32}$/.test(id))
+      throw new Error('Pedido não autorizado');
+    return getKeepJobPreview(keepAgentRoot, keepJobsRoot, id);
   });
   ipcMain.handle('notas:export-file', async (event, payload) => {
     if(!payload || typeof payload.filename!=='string' || typeof payload.content!=='string')

@@ -14,6 +14,7 @@ const replacements=new Map([
  ['desktop/main.cjs','desktop/main.cjs'],
  ['desktop/preload.cjs','desktop/preload.cjs'],
  ['desktop/keep-job-status.cjs','desktop/keep-job-status.cjs'],
+ ['desktop/keep-job-preview.cjs','desktop/keep-job-preview.cjs'],
  ['www/keep-aligner-tool.js','keep-aligner-tool.js']
 ]);
 async function prepare(installed){

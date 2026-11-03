@@ -16,7 +16,7 @@ from pptx.util import Pt
 from lxml import etree
 
 REPO = Path(__file__).resolve().parents[1]
-SOURCE = Path.home() / "Dropbox" / "1_KEEP ALIGNER PORTUGAL" / "FLUXO DE TRABALHO KEEP ALIGNER" / "GERADOR KEEP ALIGNER"
+SOURCE = Path(os.environ.get('KEEP_ACCEPTANCE_GENERATOR_SOURCE', str(Path.home() / "Dropbox" / "1_KEEP ALIGNER PORTUGAL" / "FLUXO DE TRABALHO KEEP ALIGNER" / "GERADOR KEEP ALIGNER")))
 
 
 def dump(path, value):
@@ -83,8 +83,9 @@ def templates(code, assets):
         'guide_template_sha256':sha(gp),'comparison_template':str(cp),'comparison_template_sha256':sha(cp)})
 
 
-def fixture(agent, mode):
-    reference = 'keep-mock-SYNTHETIC-' + mode.upper()
+def fixture(agent, mode, suffix=''):
+    if suffix and (not suffix.isalnum() or len(suffix)>16):raise ValueError('Invalid synthetic suffix')
+    reference = 'keep-mock-SYNTHETIC-' + mode.upper() + ('-' + suffix if suffix else '')
     plan = 'SYNTHETIC-V1'
     stage = agent.CASES / reference
     assets = stage / 'assets'
@@ -141,7 +142,9 @@ def main():
     code.mkdir()
     (code/'assets').mkdir()
     source_hashes={}
-    for name in ('keep_aligner.py','ka_core.py','ka_pptx.py','native-render.ps1'):
+    source_names=['keep_aligner.py','ka_core.py','ka_pptx.py','native-render.ps1']
+    if (SOURCE/'ka_report_layout.py').is_file():source_names.append('ka_report_layout.py')
+    for name in source_names:
         content=(SOURCE/name).read_bytes()
         (code/name).write_bytes(content)
         source_hashes[name]=hashlib.sha256(content).hexdigest()

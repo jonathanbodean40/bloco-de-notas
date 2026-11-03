@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: python -m pip install --disable-pip-version-check pillow
+      - run: python -m pip install --disable-pip-version-check pillow lxml
       - run: python -m unittest discover -s tests -p 'test_*.py' -v
       - uses: actions/setup-node@v4
         with:
@@ -23,7 +23,7 @@ jobs:
       - run: node tests/keep-local-progress.test.cjs
       - run: node tests/keep-local-executor.test.cjs
       - run: node --check desktop/main.cjs
-      - run: node --test tests/keep-job-status.test.cjs tests/keep-status-ipc.test.cjs
+      - run: node --test tests/keep-job-status.test.cjs tests/keep-status-ipc.test.cjs tests/keep-job-preview.test.cjs
 
   windows:
     needs: preflight

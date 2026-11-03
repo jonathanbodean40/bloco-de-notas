@@ -57,7 +57,19 @@
   const buttons = ['ka-copy-guide', 'ka-copy-presentation'].map(id => doc.getElementById(id));
   const buttonLabels = buttons.map(button => button.textContent);
   // The last ticket lives only in memory, not in notes or persistent storage.
-  let lastLocalTicket = null, localStatusButton = null;
+  let lastLocalTicket = null, localStatusButton = null, localPreviewButton = null, previewDialog = null;
+  function clearPreview() {
+    const modal=previewDialog;
+    previewDialog=null;
+    if (modal) {
+      modal.querySelectorAll('img').forEach(image=>image.removeAttribute('src'));
+      if (modal.open) modal.close();
+      modal.remove();
+    }
+  }
+  function previewAvailability(value) {
+    if (localPreviewButton) localPreviewButton.hidden=!(value?.state==='awaiting_visual_review' && value.artifactCount>0);
+  }
   const resetButtonLabels = () => buttons.forEach((button, index) => { button.textContent = buttonLabels[index]; });
   const shell = doc.getElementById('private-app');
   const unlocked = () => !!shell && !shell.hidden && !shell.inert && !doc.body.classList.contains('private-locked');
@@ -65,6 +77,8 @@
     revision++;
     lastLocalTicket = null;
     if (localStatusButton) localStatusButton.hidden = true;
+    if (localPreviewButton) localPreviewButton.hidden = true;
+    clearPreview();
     if (dialog.open) dialog.close();
     form.reset();
     output.value = '';
@@ -88,6 +102,8 @@
     revision++;
     lastLocalTicket = null;
     if (localStatusButton) localStatusButton.hidden = true;
+    if (localPreviewButton) localPreviewButton.hidden = true;
+    clearPreview();
     result.hidden = true;
     output.value = '';
     resetButtonLabels();
@@ -160,12 +176,71 @@
           if (ticket!==lastLocalTicket || !unlocked()) return;
           status.dataset.state=current.state==='blocked'?'error':'manual';
           status.textContent=localStatus(current).message;
+          previewAvailability(current);
         } catch {
           if (ticket===lastLocalTicket && unlocked()) {
             status.dataset.state='error';
             status.textContent='Não foi possível consultar o estado do pedido no MSI.';
           }
         } finally { localStatusButton.disabled=false; }
+      });
+    }
+    if (typeof root.NOTAS_DESKTOP.keepJobPreview === 'function') {
+      localPreviewButton=doc.createElement('button');
+      localPreviewButton.type='button';
+      localPreviewButton.className='ka-local-preview';
+      localPreviewButton.textContent='Ver prévias verificadas';
+      localPreviewButton.hidden=true;
+      actions.append(localPreviewButton);
+      localPreviewButton.addEventListener('click',async()=>{
+        if (!unlocked() || !lastLocalTicket || localPreviewButton.disabled) return;
+        const ticket=lastLocalTicket;
+        const requestedRevision=revision;
+        localPreviewButton.disabled=true;
+        clearPreview();
+        try {
+          const response=await root.NOTAS_DESKTOP.keepJobPreview(ticket);
+          if (ticket!==lastLocalTicket || requestedRevision!==revision || !unlocked()) return;
+          if(response?.id!==ticket || !Array.isArray(response.images) || ![2,4].includes(response.images.length)
+             ||response.clinicalApproval!==false ||response.publishingAuthorized!==false)
+            throw new Error('Prévia inválida.');
+          const modal=doc.createElement('dialog');
+          modal.className='ka-preview-dialog';
+          modal.setAttribute('aria-label','Prévia técnica — revisão pendente');
+          Object.assign(modal.style,{width:'min(1100px, 94vw)',maxHeight:'90vh',padding:'24px',overflow:'auto'});
+          const title=doc.createElement('h2');title.textContent='Prévia técnica — revisão pendente';
+          const notice=doc.createElement('p');notice.textContent='As imagens não constituem aprovação clínica nem autorização de publicação.';
+          const close=doc.createElement('button');close.type='button';close.textContent='Fechar prévias';
+          close.addEventListener('click',()=>modal.close());
+          modal.append(title,notice,close);
+          const decoding=[];
+          for(const item of response.images){
+            if(typeof item.dataUrl!=='string' || !/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(item.dataUrl)
+               ||!['guide-1.png','guide-2.png','comparison-1.png','movement-table.png'].includes(item.name))
+              throw new Error('Imagem de prévia inválida.');
+            const figure=doc.createElement('figure');figure.style.margin='24px 0';
+            const caption=doc.createElement('figcaption');caption.textContent=String(item.label||item.name);
+            const image=doc.createElement('img');image.alt=String(item.label||item.name);
+            Object.assign(image.style,{width:'100%',height:'auto',display:'block'});
+            image.src=item.dataUrl;
+            figure.append(caption,image);modal.append(figure);
+            decoding.push(image.decode());
+          }
+          modal.addEventListener('close',()=>{
+            modal.querySelectorAll('img').forEach(image=>image.removeAttribute('src'));
+            modal.remove();if(previewDialog===modal)previewDialog=null;
+          });
+          doc.body.append(modal);previewDialog=modal;
+          await Promise.all(decoding);
+          if(ticket!==lastLocalTicket || requestedRevision!==revision || !unlocked()) {clearPreview();return;}
+          modal.showModal();close.focus();
+        }catch{
+          clearPreview();
+          if(ticket===lastLocalTicket && unlocked()){
+            status.dataset.state='error';
+            status.textContent='Não foi possível verificar as prévias. Os ficheiros podem ter sido alterados; não publique o pacote.';
+          }
+        }finally{localPreviewButton.disabled=false;}
       });
     }
     for (const [mode, label] of [
@@ -200,6 +275,7 @@
               const current=localStatus(state);
               status.dataset.state=state.state==='blocked'?'error':'manual';
               status.textContent=current.message;
+              previewAvailability(state);
               if(current.pending)continue;
               receivedResult=true;
               // A generated technical draft or missing source is never approval.

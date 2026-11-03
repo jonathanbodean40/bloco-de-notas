@@ -36,6 +36,10 @@ test('actual status IPC uses the read-only status reader and keeps authorization
   await ready[0]();
   const status=handlers.get('notas:keep-status'), queue=handlers.get('notas:keep-queue');
   assert.equal(typeof status,'function');
+  const preview=handlers.get('notas:keep-preview');
+  assert.equal(typeof preview,'function');
+  await assert.rejects(preview({sender:{getURL:()=> 'https://example.invalid'}},'a'.repeat(32)),/não autorizado/);
+  await assert.rejects(preview({sender},'../outside'),/não autorizado/);
   const absent=await status({sender},'a'.repeat(32));
   assert.equal(absent.state,'not_found');
   await assert.rejects(status({sender:{getURL:()=> 'https://example.invalid'}},'a'.repeat(32)),/não autorizado/);
