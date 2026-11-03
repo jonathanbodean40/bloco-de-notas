@@ -9,7 +9,7 @@ const repo=path.resolve(__dirname,'..');
 const sandbox=fs.mkdtempSync(path.join(os.tmpdir(),'keep-electron-progress-'));
 const host=path.join(sandbox,'app');
 for(const dir of ['desktop','www'])fs.mkdirSync(path.join(host,dir),{recursive:true});
-for(const name of ['main.cjs','preload.cjs'])fs.copyFileSync(path.join(repo,'desktop',name),path.join(host,'desktop',name));
+for(const name of ['main.cjs','preload.cjs','keep-job-status.cjs'])fs.copyFileSync(path.join(repo,'desktop',name),path.join(host,'desktop',name));
 fs.copyFileSync(path.join(repo,'keep-aligner-tool.js'),path.join(host,'www','keep-aligner-tool.js'));
 fs.writeFileSync(path.join(host,'package.json'),JSON.stringify({name:'keep-synthetic-progress',version:'0.0.0',main:'desktop/main.cjs'}));
 fs.writeFileSync(path.join(host,'www','index.html'),`<!doctype html><html><meta charset="utf-8"><title>SYNTHETIC OFFLINE TEST</title>

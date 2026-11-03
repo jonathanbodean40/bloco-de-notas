@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
+const { getKeepJobStatus } = require('./keep-job-status.cjs');
 const keepAgentRoot=path.join(process.env.LOCALAPPDATA || app.getPath('home'), 'KeepAligner', 'LocalAgent');
 function authorisedWindow(event){
   return Boolean(BrowserWindow.fromWebContents(event.sender) && event.sender.getURL().startsWith('notas://app/'));
@@ -72,20 +73,7 @@ app.whenReady().then(() => {
   ipcMain.handle('notas:keep-status', async (event, id) => {
     if(!authorisedWindow(event) || typeof id!=='string' || !/^[a-f0-9]{32}$/.test(id))
       throw new Error('Pedido não autorizado');
-    const target=path.join(keepAgentRoot,'results',id+'.json');
-    try {
-      const payload=JSON.parse(await fs.readFile(target,'utf8'));
-      const progress=payload.progress;
-      const safeProgress=progress && Number.isInteger(progress.step) && progress.step>=1 && progress.step<=3 && progress.total===3
-        ? {step:progress.step,total:3}:null;
-      const report=payload.artifactReport;
-      const artifactCount=report?.verified===true && Array.isArray(report.files) ? report.files.length:0;
-      return {id,state:payload.state||'blocked',message:String(payload.message||'').slice(0,300),
-        progress:safeProgress,artifactCount,clinicalApproval:false,publishingAuthorized:false};
-    } catch(error){
-      if(error?.code==='ENOENT')return {id,state:'queued'};
-      throw new Error('Não foi possível consultar o executor');
-    }
+    return getKeepJobStatus(keepAgentRoot, id);
   });
   ipcMain.handle('notas:export-file', async (event, payload) => {
     if(!payload || typeof payload.filename!=='string' || typeof payload.content!=='string')
