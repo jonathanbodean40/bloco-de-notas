@@ -51,3 +51,36 @@ Private test evidence is retained under `Documents/KeepAligner_LocalTests/report
 Authenticated My Keep/Hirsch collection and anatomical capture acceptance are not completed. Browser reported that this conversation lacked its originating browser context. The previously blocked case/source-binding implementation is not retried through another connector, and the synthetic-only production gate is unchanged. A real local layout test is not an online case/version acceptance and is not clinical approval.
 
 Desktop preview deployment and installed full-generation acceptance will be recorded below only after they are actually verified.
+
+## Desktop deployment and installed full-generation acceptance — verified
+
+At **2026-11-03 19:20:04 UTC**, the tested preview update from commit `7a179de38a4589de5869d2bd5a8db54f7da75548` was installed as a local hotfix to application base version 0.1.3. The actual ASAR candidate passed its five isolated package checks before the switch. The native executable and security fuses were not changed.
+
+Installed ASAR SHA-256: `5ff5c65e1d3fe458c8f344ffe4af63e2ab73b1554cde4877a3b8bfe6ac2f1151`.
+Previous ASAR SHA-256: `13a93d005d4116ca2596c9400b0e933b482a5818858ffd54bc0df7c317e476d7`.
+Backup retained at `%LOCALAPPDATA%\KeepAligner\DesktopBackups\20261103-192004-8e225648`.
+
+Post-install verification compared the 172 packaged files with the prior archive: precisely four workflow resources changed and 168 files were unchanged. The notes editor, configuration, authentication and sync resources remained byte-identical. The user's notes profile was not read or modified.
+
+At **19:20:49 UTC**, the full installed-generation test passed. The actual installed ASAR, running under development Electron with a disposable notes profile and blocked networking, submitted a new entirely fictitious presentation request to the existing installed service. The installed generator and PowerPoint actually ran. Observed states were `queued`, `generating`, `awaiting_visual_review`; shorter intermediate states need not appear at the polling interval.
+
+The installed service verified all **nine output files**. The installed preview IPC returned four PNGs with hashes matching those outputs:
+
+| Image | Dimensions |
+| --- | --- |
+| Guide page 1 | 1304 x 1701 |
+| Guide page 2 | 1304 x 1701 |
+| Before/after comparison | 3840 x 2160 |
+| Synthetic movement table | 841 x 421 |
+
+The test uses the official local presentation/guide templates but wholly fictitious inputs and non-anatomical placeholder capture images. Unlike the previous missing-case smoke test, this test **did invoke the actual installed generator**. Unlike clinical end-to-end acceptance, it **did not connect to My Keep, Hirsch or Onyx**, authenticate the current real plan, or acquire anatomical captures. Technical readiness must not be represented as clinical approval.
+
+The returned two guide pages and comparison were inspected visually after reading them back through the preview IPC. Private source/result evidence remains under `Documents/KeepAligner_LocalTests/keep-mock-installed-5e6uwmrf`. The original synthetic staged inputs and result are retained for audit; nothing was archived to a patient folder or published.
+
+At **19:24:42 UTC** the installed worker process was active, heartbeat age four seconds, queue depth zero and scheduled task Running. Installed generator/helper hashes matched the tested candidate. This is not a physical Windows-reboot test.
+
+The synthetic-only execution gate is still unchanged. The outstanding work is authenticated source acquisition/anatomical capture acceptance, complete pre-generation case/source binding, and a final real-case end-to-end acceptance. The owner's read-only authorization already exists; these are remaining technical limitations.
+
+## Remote CI confirmation
+
+GitHub Actions run `41702205813`, for code commit `7a179de38a4589de5869d2bd5a8db54f7da75548`, completed successfully for all three jobs: **preflight**, **Windows build**, and **Android build**. This confirms the development build/test jobs; no Android application was installed on the user's phone in this session.
