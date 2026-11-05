@@ -552,7 +552,7 @@
     editor.addEventListener('paste',e=>{e.preventDefault();e.stopPropagation();target();rememberSelection(w);const data=e.clipboardData,files=[...data.files].filter(f=>f.type.startsWith('image/'));if(files.length){files.forEach(f=>insertImageFile(w,f,box?.id||null));return;}const html=data.getData('text/html');const plain=document.createElement('div');plain.textContent=data.getData('text/plain');command('insertHTML',cleanClipboardHTML(html||plain.innerHTML),w);});
     editor.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();target();[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')).forEach(f=>insertImageFile(w,f,box?.id||null));});
     editor.addEventListener('dragover',e=>e.preventDefault());
-    editor.lang=({pt:'pt-PT',en:'en',es:'es'})[localStorage.getItem(GUEST_KEY+':spelling-language')]||'pt-PT';editor.setAttribute('autocorrect','on');editor.autocapitalize='off';editor.addEventListener('beforeinput',e=>{autoCapitalLetter(e,w,editor);if(e.defaultPrevented)return;if(e.inputType==='insertParagraph'||e.inputType==='insertLineBreak')queueSpellCorrection({data:' ',paragraph:true},w,editor);if(e.inputType==='historyUndo'||e.inputType==='historyRedo'){e.preventDefault();undo(w,e.inputType==='historyUndo'?-1:1);}});
+    editor.lang=({pt:'pt-PT',en:'en',es:'es'})[localStorage.getItem(GUEST_KEY+':spelling-language')]||'pt-PT';editor.setAttribute('autocorrect','off');editor.autocapitalize='off';editor.addEventListener('beforeinput',e=>{autoCapitalLetter(e,w,editor);if(e.defaultPrevented)return;if(e.inputType==='insertParagraph'||e.inputType==='insertLineBreak')queueSpellCorrection({data:' ',paragraph:true},w,editor);if(e.inputType==='historyUndo'||e.inputType==='historyRedo'){e.preventDefault();undo(w,e.inputType==='historyUndo'?-1:1);}});
   }
   function setSymbolColor(w,color){
     const o=findObject(w,w.selected);if(o?.type!=='symbol'||!/^#[0-9a-f]{6}$/i.test(color))return false;
@@ -1037,13 +1037,9 @@
   let spellingLanguage=localStorage.getItem(GUEST_KEY+':spelling-language')||'auto';
   if(!['auto','pt','en','es','off'].includes(spellingLanguage))spellingLanguage='auto';
   let spellingWorker=null,spellingId=0;const spellingJobs=new Map();
-  function applySpellingLanguage(){document.querySelectorAll('.note-editor,.textbox-editor,.onyx-text').forEach(el=>{el.lang=({pt:'pt-PT',en:'en',es:'es'})[spellingLanguage]||'pt-PT';el.setAttribute('autocorrect',spellingLanguage==='off'?'off':'on');});}
-  function queueSpellCorrection(e,w,editor){
-    if(!spellingWorker||spellingLanguage==='off'||e.isComposing||!e.data||!/[\s,;.!?:]/.test(e.data))return;
-    const sel=getSelection();if(!sel?.isCollapsed||sel.anchorNode?.nodeType!==3)return;const node=sel.anchorNode,pos=sel.anchorOffset;if(!editor.contains(node)||node.parentElement?.closest('a,code,pre')||(e.paragraph&&/[\p{L}]/u.test(node.textContent[pos]||'')))return;
-    const before=node.textContent.slice(0,pos)+(e.paragraph?' ':''),match=/(^|[\s([{“«])([\p{L}]{2,60})([\s,;.!?:]+)$/u.exec(before);if(!match)return;
-    const word=match[2],names=readJSON(GUEST_KEY+':names',[]);if(Array.isArray(names)&&names.some(n=>typeof n==='string'&&n.toLocaleLowerCase()===word.toLocaleLowerCase()))return;
-    const id=++spellingId,start=match.index+match[1].length;spellingJobs.set(id,{node,start,word,w,editor,leaving:!!e.leaving,epoch:sessionEpoch});if(spellingJobs.size>60)spellingJobs.delete(spellingJobs.keys().next().value);spellingWorker.postMessage({id,word,language:spellingLanguage});
+  function applySpellingLanguage(){document.querySelectorAll('.note-editor,.textbox-editor,.onyx-text').forEach(el=>{el.lang=({pt:'pt-PT',en:'en',es:'es'})[spellingLanguage]||'pt-PT';el.setAttribute('autocorrect','off');});}
+  function queueSpellCorrection(){
+    // Word prediction and automatic replacements are disabled.
   }
   const spellingSuggestions=document.createElement('div');spellingSuggestions.id='spelling-suggestions';spellingSuggestions.hidden=true;spellingSuggestions.setAttribute('aria-label','Sugestões ortográficas');document.body.append(spellingSuggestions);
   function showSpellingSuggestions(job,choices){
